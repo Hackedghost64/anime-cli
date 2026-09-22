@@ -227,11 +227,19 @@ async def cmd_terminal(
                 cur_idx = idx
                 break
 
-        episode = episodes[cur_idx]
-        resume_position = last_pos
-        mins = int(resume_position // 60)
-        secs = int(resume_position % 60)
-        print(f"{C_GOLD}▶ Resuming Episode {episode.get('num', last_ep_num)} at {mins:02d}:{secs:02d}{C_RESET}")
+        # Check if last watched episode was completed (>= 90% or within 60s of end)
+        is_completed = (last_dur > 0 and (last_pos / last_dur) >= 0.90) or (last_pos >= 1200 and (last_dur - last_pos) <= 60)
+        if is_completed and cur_idx + 1 < len(episodes):
+            cur_idx += 1
+            episode = episodes[cur_idx]
+            resume_position = 0.0
+            print(f"{C_GOLD}▶ Episode {last_ep_num} was completed. Starting Episode {episode.get('num', cur_idx+1)}{C_RESET}")
+        else:
+            episode = episodes[cur_idx]
+            resume_position = last_pos
+            mins = int(resume_position // 60)
+            secs = int(resume_position % 60)
+            print(f"{C_GOLD}▶ Resuming Episode {episode.get('num', last_ep_num)} at {mins:02d}:{secs:02d}{C_RESET}")
 
     # 2. Search & Select Mode
     if not episode:
@@ -296,232 +304,254 @@ async def cmd_terminal(
         if ep_idx is None:
             return
 
-        episode = episodes[ep_idx]
+        cur_idx = ep_idx
+        episode = episodes[cur_idx]
 
         # Check if selected episode has resume position
         p = prog_map.get(str(episode.get("id")))
         if p:
             pos = float(p.get("position", 0.0))
             dur = float(p.get("duration", 0.0))
-            if pos > 10 and (dur == 0 or (pos / dur) < 0.88):
+            if pos > 10 and (dur == 0 or (pos / dur) < 0.90):
                 resume_position = pos
                 mins = int(resume_position // 60)
                 secs = int(resume_position % 60)
                 print(f"{C_GOLD}▶ Saved progress found: resuming at {mins:02d}:{secs:02d}{C_RESET}")
 
-    ep_id = str(episode.get("id"))
-    ep_num = str(episode.get("num", "1"))
-    ep_name = episode.get("name") or f"Episode {ep_num}"
-    print(f"{C_GREEN}Selected: #{ep_num} - {ep_name}{C_RESET}")
+    active_dub_pref = dub_pref
+    while cur_idx < len(episodes):
+        episode = episodes[cur_idx]
+        ep_id = str(episode.get("id"))
+        ep_num = str(episode.get("num", cur_idx + 1))
+        ep_name = episode.get("name") or f"Episode {ep_num}"
+        print(f"\n{C_GREEN}{C_BOLD}Selected: #{ep_num} - {ep_name}{C_RESET}")
 
-    # Kick off AniSkip query concurrently in parallel with server extraction
-    aniskip_task = None
-    if not download:
-        aniskip_task = asyncio.create_task(
-            aniskip.get_skip_times(anime_title, int(ep_num) if ep_num.isdigit() else 1, 1440.0)
-        )
-
-    # Fetch Servers
-    print(f"{C_CYAN}Resolving available stream servers...{C_RESET}")
-    servers = await kyoto.get_servers(anime_id, ep_id)
-    if not servers:
-        print(f"{C_RED}No servers found for this episode.{C_RESET}")
-        return
-
-    # Separate SUB and DUB
-    subs = [s for s in servers if s.get("lang") == "sub"]
-    dubs = [s for s in servers if s.get("lang") == "dub"]
-
-    selected_server = None
-
-    # Handle language preference or prompt
-    if dub_pref is True:
-        if dubs:
-            selected_server = dubs[0]
-            print(f"{C_GOLD}Using English Dub{C_RESET}")
-        else:
-            print(f"{C_RED}English Dub unavailable for this episode. Falling back to Japanese Sub.{C_RESET}")
-            selected_server = subs[0] if subs else servers[0]
-    elif dub_pref is False:
-        if subs:
-            selected_server = subs[0]
-            print(f"{C_GOLD}Using Japanese Sub{C_RESET}")
-        else:
-            print(f"{C_RED}Japanese Sub unavailable for this episode. Falling back to English Dub.{C_RESET}")
-            selected_server = dubs[0] if dubs else servers[0]
-    else:
-        # Prompt user if both are available
-        if subs and dubs:
-            audio_opts = [
-                f"🇯🇵 SUB - Japanese Audio with Subtitles ({len(subs)} server{'s' if len(subs)>1 else ''})",
-                f"🇺🇸 DUB - English Audio ({len(dubs)} server{'s' if len(dubs)>1 else ''})"
-            ]
-            choice = fzf_select(audio_opts, prompt="Choose Audio > ")
-            if choice == 1:
-                selected_server = dubs[0]
-            else:
-                selected_server = subs[0]
-        elif dubs:
-            print(f"{C_GOLD}Audio: English DUB (only option available){C_RESET}")
-            selected_server = dubs[0]
-        else:
-            print(f"{C_GOLD}Audio: Japanese SUB (only option available){C_RESET}")
-            selected_server = subs[0] if subs else servers[0]
-
-    print(f"{C_CYAN}Extracting 1080p HLS stream from {selected_server.get('name')}...{C_RESET}")
-    stream_res = await kyoto.resolve_stream(anime_id, selected_server.get("id"))
-    stream_url = stream_res.get("url")
-    if not stream_url:
-        print(f"{C_RED}Failed to resolve video stream.{C_RESET}")
-        return
-
-    # Download mode
-    if download:
-        safe_title = "".join(c for c in anime_title if c.isalnum() or c in " -_").strip()
-        filename = f"{safe_title} - Ep {ep_num}.mp4"
-        print(f"\n{C_ORANGE}Downloading to '{filename}' via FFmpeg...{C_RESET}")
-        ffmpeg_cmd = [
-            "ffmpeg", "-y", "-headers", "Referer: https://play.app/\r\n",
-            "-i", stream_url, "-c", "copy", "-bsf:a", "aac_adtstoasc", filename
-        ]
-        subprocess.run(ffmpeg_cmd)
-        print(f"{C_GREEN}✓ Download complete: {filename}{C_RESET}")
-        return
-
-    # AniSkip Integration: Auto-Skip Openings in MPV
-    skip_data = {}
-    if aniskip_task:
-        try:
-            skip_data = await aniskip_task
-        except Exception:
-            skip_data = {}
-
-    # Prepare MPV integration Lua script (AniSkip + Precise Playback Position Tracker)
-    progress_file = f"/tmp/mpv_progress_{os.getpid()}_{anime_id}_{ep_id}.txt"
-    lua_script_path = f"/tmp/anime_mpv_{os.getpid()}_{anime_id}_{ep_id}.lua"
-
-    lua_code = [
-        f'local progress_file = "{progress_file}"',
-        'local last_pos = 0',
-        'local last_dur = 0',
-        'mp.observe_property("time-pos", "number", function(name, val)',
-        '    if val then last_pos = val end',
-        'end)',
-        'mp.observe_property("duration", "number", function(name, val)',
-        '    if val then last_dur = val end',
-        'end)',
-        'local function save_pos()',
-        '    local pos = mp.get_property_number("time-pos") or last_pos',
-        '    local dur = mp.get_property_number("duration") or last_dur',
-        '    if pos and pos > 0 then',
-        '        local f = io.open(progress_file, "w")',
-        '        if f then',
-        '            f:write(string.format("%.2f %.2f", pos, dur or 0))',
-        '            f:close()',
-        '        end',
-        '    end',
-        'end',
-        'mp.add_periodic_timer(2, save_pos)',
-        'mp.observe_property("pause", "bool", function(name, val) if val then save_pos() end end)',
-        'mp.register_event("shutdown", save_pos)'
-    ]
-
-    if skip_data.get("found") and skip_data.get("results"):
-        op = next((r for r in skip_data["results"] if r.get("type") == "op"), None)
-        ed = next((r for r in skip_data["results"] if r.get("type") == "ed"), None)
-        if op:
-            lua_code.extend([
-                f"local op_start = {op['start']}",
-                f"local op_end = {op['end']}",
-                "local has_skipped_op = false",
-                'mp.observe_property("time-pos", "number", function(name, val)',
-                '    if val and val >= op_start and val < op_end and not has_skipped_op then',
-                '        has_skipped_op = true',
-                '        mp.set_property_number("time-pos", op_end + 0.5)',
-                '        mp.osd_message("⚡ Skipped Opening Theme", 3)',
-                '    end',
-                'end)'
-            ])
-            print(f"{C_GOLD}⚡ AniSkip: Auto-skip Opening armed ({int(op['start'])}s -> {int(op['end'])}s){C_RESET}")
-        if ed:
-            lua_code.extend([
-                f"local ed_start = {ed['start']}",
-                f"local ed_end = {ed['end']}",
-                "local has_skipped_ed = false",
-                'mp.observe_property("time-pos", "number", function(name, val)',
-                '    if val and val >= ed_start and val < ed_end and not has_skipped_ed then',
-                '        has_skipped_ed = true',
-                '        mp.set_property_number("time-pos", ed_end + 0.5)',
-                '        mp.osd_message("⚡ Skipped Ending Theme", 3)',
-                '    end',
-                'end)'
-            ])
-            print(f"{C_GOLD}⚡ AniSkip: Auto-skip Ending armed ({int(ed['start'])}s -> {int(ed['end'])}s){C_RESET}")
-
-    with open(lua_script_path, "w") as f:
-        f.write("\n".join(lua_code))
-
-    # Launch MPV
-    mpv_bin = shutil.which("mpv")
-    if not mpv_bin:
-        print(f"\n{C_RED}mpv is not installed. Stream URL:{C_RESET}\n{stream_url}")
-        return
-
-    mpv_cmd = [
-        mpv_bin,
-        f"--title={anime_title} - Episode {ep_num}",
-        "--hwdec=auto",
-        "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "--referrer=https://play.app/",
-        f"--script={lua_script_path}",
-        stream_url
-    ]
-
-    if resume_position > 10:
-        mpv_cmd.insert(len(mpv_cmd) - 1, f"--start={int(resume_position)}")
-
-    print(f"\n{C_GREEN}{C_BOLD}▶ Playing in MPV... (Press 'q' to quit, Space to pause, arrows to seek){C_RESET}")
-    try:
-        subprocess.run(mpv_cmd)
-    finally:
-        # Read exact time-pos and duration captured by Lua hook
-        final_pos = 0.0
-        final_dur = 0.0
-        if os.path.exists(progress_file):
-            try:
-                with open(progress_file, "r") as f:
-                    parts = f.read().strip().split()
-                    if len(parts) >= 2:
-                        final_pos = float(parts[0])
-                        final_dur = float(parts[1])
-            except Exception:
-                pass
-            try:
-                os.remove(progress_file)
-            except Exception:
-                pass
-
-        if os.path.exists(lua_script_path):
-            try:
-                os.remove(lua_script_path)
-            except Exception:
-                pass
-
-        # Save actual watch progress to SQLite
-        if final_pos > 5 and final_dur > 0:
-            await db.save_progress(
-                anime_id=anime_id,
-                ep_id=ep_id,
-                position=final_pos,
-                duration=final_dur,
-                anime_title=anime_title,
-                anime_poster=anime_poster,
-                ep_num=ep_num,
-                ep_name=ep_name
+        # Kick off AniSkip query concurrently in parallel with server extraction
+        aniskip_task = None
+        if not download:
+            aniskip_task = asyncio.create_task(
+                aniskip.get_skip_times(anime_title, int(ep_num) if str(ep_num).isdigit() else 1, 1440.0)
             )
-            mins = int(final_pos // 60)
-            secs = int(final_pos % 60)
-            print(f"\n{C_GREEN}✓ Saved watch progress: Episode {ep_num} at {mins:02d}:{secs:02d}{C_RESET}")
+
+        # Fetch Servers
+        print(f"{C_CYAN}Resolving available stream servers...{C_RESET}")
+        servers = await kyoto.get_servers(anime_id, ep_id)
+        if not servers:
+            print(f"{C_RED}No servers found for this episode.{C_RESET}")
+            return
+
+        # Separate SUB and DUB
+        subs = [s for s in servers if s.get("lang") == "sub"]
+        dubs = [s for s in servers if s.get("lang") == "dub"]
+
+        selected_server = None
+
+        # Handle language preference or prompt
+        if active_dub_pref is True:
+            if dubs:
+                selected_server = dubs[0]
+                print(f"{C_GOLD}Using English Dub{C_RESET}")
+            else:
+                print(f"{C_RED}English Dub unavailable for this episode. Falling back to Japanese Sub.{C_RESET}")
+                selected_server = subs[0] if subs else servers[0]
+        elif active_dub_pref is False:
+            if subs:
+                selected_server = subs[0]
+                print(f"{C_GOLD}Using Japanese Sub{C_RESET}")
+            else:
+                print(f"{C_RED}Japanese Sub unavailable for this episode. Falling back to English Dub.{C_RESET}")
+                selected_server = dubs[0] if dubs else servers[0]
+        else:
+            # Prompt user if both are available
+            if subs and dubs:
+                audio_opts = [
+                    f"🇯🇵 SUB - Japanese Audio with Subtitles ({len(subs)} server{'s' if len(subs)>1 else ''})",
+                    f"🇺🇸 DUB - English Audio ({len(dubs)} server{'s' if len(dubs)>1 else ''})"
+                ]
+                choice = fzf_select(audio_opts, prompt="Choose Audio > ")
+                if choice == 1:
+                    selected_server = dubs[0]
+                    active_dub_pref = True
+                else:
+                    selected_server = subs[0]
+                    active_dub_pref = False
+            elif dubs:
+                print(f"{C_GOLD}Audio: English DUB (only option available){C_RESET}")
+                selected_server = dubs[0]
+                active_dub_pref = True
+            else:
+                print(f"{C_GOLD}Audio: Japanese SUB (only option available){C_RESET}")
+                selected_server = subs[0] if subs else servers[0]
+                active_dub_pref = False
+
+        print(f"{C_CYAN}Extracting 1080p HLS stream from {selected_server.get('name')}...{C_RESET}")
+        stream_res = await kyoto.resolve_stream(anime_id, selected_server.get("id"))
+        stream_url = stream_res.get("url")
+        if not stream_url:
+            print(f"{C_RED}Failed to resolve video stream.{C_RESET}")
+            return
+
+        # Download mode
+        if download:
+            safe_title = "".join(c for c in anime_title if c.isalnum() or c in " -_").strip()
+            filename = f"{safe_title} - Ep {ep_num}.mp4"
+            print(f"\n{C_ORANGE}Downloading to '{filename}' via FFmpeg...{C_RESET}")
+            ffmpeg_cmd = [
+                "ffmpeg", "-y", "-headers", "Referer: https://play.app/\r\n",
+                "-i", stream_url, "-c", "copy", "-bsf:a", "aac_adtstoasc", filename
+            ]
+            subprocess.run(ffmpeg_cmd)
+            print(f"{C_GREEN}✓ Download complete: {filename}{C_RESET}")
+            return
+
+        # AniSkip Integration: Auto-Skip Openings in MPV
+        skip_data = {}
+        if aniskip_task:
+            try:
+                skip_data = await aniskip_task
+            except Exception:
+                skip_data = {}
+
+        # Prepare MPV integration Lua script (AniSkip + Precise Playback Position Tracker)
+        progress_file = f"/tmp/mpv_progress_{os.getpid()}_{anime_id}_{ep_id}.txt"
+        lua_script_path = f"/tmp/anime_mpv_{os.getpid()}_{anime_id}_{ep_id}.lua"
+
+        lua_code = [
+            f'local progress_file = "{progress_file}"',
+            'local last_pos = 0',
+            'local last_dur = 0',
+            'mp.observe_property("time-pos", "number", function(name, val)',
+            '    if val then last_pos = val end',
+            'end)',
+            'mp.observe_property("duration", "number", function(name, val)',
+            '    if val then last_dur = val end',
+            'end)',
+            'local function save_pos()',
+            '    local pos = mp.get_property_number("time-pos") or last_pos',
+            '    local dur = mp.get_property_number("duration") or last_dur',
+            '    if pos and pos > 0 then',
+            '        local f = io.open(progress_file, "w")',
+            '        if f then',
+            '            f:write(string.format("%.2f %.2f", pos, dur or 0))',
+            '            f:close()',
+            '        end',
+            '    end',
+            'end',
+            'mp.add_periodic_timer(2, save_pos)',
+            'mp.observe_property("pause", "bool", function(name, val) if val then save_pos() end end)',
+            'mp.register_event("shutdown", save_pos)'
+        ]
+
+        if skip_data.get("found") and skip_data.get("results"):
+            op = next((r for r in skip_data["results"] if r.get("type") == "op"), None)
+            ed = next((r for r in skip_data["results"] if r.get("type") == "ed"), None)
+            if op:
+                lua_code.extend([
+                    f"local op_start = {op['start']}",
+                    f"local op_end = {op['end']}",
+                    "local has_skipped_op = false",
+                    'mp.observe_property("time-pos", "number", function(name, val)',
+                    '    if val and val >= op_start and val < op_end and not has_skipped_op then',
+                    '        has_skipped_op = true',
+                    '        mp.set_property_number("time-pos", op_end + 0.5)',
+                    '        mp.osd_message("⚡ Skipped Opening Theme", 3)',
+                    '    end',
+                    'end)'
+                ])
+                print(f"{C_GOLD}⚡ AniSkip: Auto-skip Opening armed ({int(op['start'])}s -> {int(op['end'])}s){C_RESET}")
+            if ed:
+                lua_code.extend([
+                    f"local ed_start = {ed['start']}",
+                    f"local ed_end = {ed['end']}",
+                    "local has_skipped_ed = false",
+                    'mp.observe_property("time-pos", "number", function(name, val)',
+                    '    if val and val >= ed_start and val < ed_end and not has_skipped_ed then',
+                    '        has_skipped_ed = true',
+                    '        mp.set_property_number("time-pos", ed_end + 0.5)',
+                    '        mp.osd_message("⚡ Skipped Ending Theme", 3)',
+                    '    end',
+                    'end)'
+                ])
+                print(f"{C_GOLD}⚡ AniSkip: Auto-skip Ending armed ({int(ed['start'])}s -> {int(ed['end'])}s){C_RESET}")
+
+        with open(lua_script_path, "w") as f:
+            f.write("\n".join(lua_code))
+
+        # Launch MPV
+        mpv_bin = shutil.which("mpv")
+        if not mpv_bin:
+            print(f"\n{C_RED}mpv is not installed. Stream URL:{C_RESET}\n{stream_url}")
+            return
+
+        mpv_cmd = [
+            mpv_bin,
+            f"--title={anime_title} - Episode {ep_num}",
+            "--hwdec=auto",
+            "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "--referrer=https://play.app/",
+            f"--script={lua_script_path}",
+            stream_url
+        ]
+
+        if resume_position > 10:
+            mpv_cmd.insert(len(mpv_cmd) - 1, f"--start={int(resume_position)}")
+
+        print(f"\n{C_GREEN}{C_BOLD}▶ Playing in MPV... (Press 'q' to quit, Space to pause, arrows to seek){C_RESET}")
+        try:
+            subprocess.run(mpv_cmd)
+        finally:
+            # Read exact time-pos and duration captured by Lua hook
+            final_pos = 0.0
+            final_dur = 0.0
+            if os.path.exists(progress_file):
+                try:
+                    with open(progress_file, "r") as f:
+                        parts = f.read().strip().split()
+                        if len(parts) >= 2:
+                            final_pos = float(parts[0])
+                            final_dur = float(parts[1])
+                except Exception:
+                    pass
+                try:
+                    os.remove(progress_file)
+                except Exception:
+                    pass
+
+            if os.path.exists(lua_script_path):
+                try:
+                    os.remove(lua_script_path)
+                except Exception:
+                    pass
+
+            # Save actual watch progress to SQLite
+            if final_pos > 5 and final_dur > 0:
+                await db.save_progress(
+                    anime_id=anime_id,
+                    ep_id=ep_id,
+                    position=final_pos,
+                    duration=final_dur,
+                    anime_title=anime_title,
+                    anime_poster=anime_poster,
+                    ep_num=ep_num,
+                    ep_name=ep_name
+                )
+                mins = int(final_pos // 60)
+                secs = int(final_pos % 60)
+                print(f"\n{C_GREEN}✓ Saved watch progress: Episode {ep_num} at {mins:02d}:{secs:02d}{C_RESET}")
+
+        # Auto-play next episode check
+        is_completed = (final_dur > 0 and (final_pos / final_dur) >= 0.90) or (final_pos >= 1200 and (final_dur - final_pos) <= 60)
+        if is_completed and cur_idx + 1 < len(episodes):
+            cur_idx += 1
+            resume_position = 0.0
+            next_num = episodes[cur_idx].get("num", cur_idx + 1)
+            print(f"\n{C_GOLD}{C_BOLD}▶ Episode {ep_num} finished! Autoplaying Episode {next_num} in 2s (Press Ctrl+C to stop)...{C_RESET}")
+            try:
+                await asyncio.sleep(2)
+            except (asyncio.CancelledError, KeyboardInterrupt):
+                break
+        else:
+            break
 
 # -----------------------------------------------------------------------------
 # Main Interactive Menu
