@@ -16,14 +16,14 @@ M3U8_RE = re.compile(r"https?://[^\s\"'<>\\]+?\.m3u8[^\s\"'<>\\]*")
 CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
 def _curl_get_json_sync(url: str, headers: Optional[Dict[str,str]] = None, params: Optional[Dict[str,Any]] = None) -> Dict[str,Any]:
-    """Fast sync fetch via httpx, falling back to curl_cffi (chrome impersonate) if needed."""
+    """Fast sync fetch via httpx, falling back to curl_cffi (chrome impersonate + IPv4) if needed."""
     clean_hdrs = dict(headers or {})
     clean_hdrs["User-Agent"] = CHROME_UA
 
     # 1. Try httpx first (fast pooled connections)
     import httpx as _httpx
     try:
-        with _httpx.Client(follow_redirects=True, timeout=5) as c:
+        with _httpx.Client(follow_redirects=True, timeout=10) as c:
             r = c.get(url, headers=clean_hdrs, params=params)
             r.raise_for_status()
             txt = r.text.strip()
@@ -36,14 +36,21 @@ def _curl_get_json_sync(url: str, headers: Optional[Dict[str,str]] = None, param
     except Exception:
         pass
 
-    # 2. Fallback to curl_cffi with Chrome impersonation
+    # 2. Fallback to curl_cffi with Chrome impersonation forced to IPv4
     try:
         from curl_cffi import requests as creq
+        from curl_cffi.curl import CurlOpt
         if params:
             from urllib.parse import urlencode
             qs = urlencode({k:v for k,v in params.items() if v is not None})
             url = url + ("&" if "?" in url else "?") + qs
-        r = creq.get(url, headers=clean_hdrs, impersonate="chrome", timeout=8)
+        r = creq.get(
+            url, 
+            headers=clean_hdrs, 
+            impersonate="chrome", 
+            timeout=10, 
+            curl_options={CurlOpt.IPRESOLVE: 1}
+        )
         r.raise_for_status()
         txt = r.text.strip()
         if not txt:
@@ -61,7 +68,7 @@ def _curl_get_text_sync(url: str, headers: Optional[Dict[str,str]] = None) -> st
 
     import httpx as _httpx
     try:
-        with _httpx.Client(follow_redirects=True, timeout=5) as c:
+        with _httpx.Client(follow_redirects=True, timeout=10) as c:
             r = c.get(url, headers=clean_hdrs)
             r.raise_for_status()
             return r.text
@@ -70,7 +77,14 @@ def _curl_get_text_sync(url: str, headers: Optional[Dict[str,str]] = None) -> st
 
     try:
         from curl_cffi import requests as creq
-        r = creq.get(url, headers=clean_hdrs, impersonate="chrome", timeout=8)
+        from curl_cffi.curl import CurlOpt
+        r = creq.get(
+            url, 
+            headers=clean_hdrs, 
+            impersonate="chrome", 
+            timeout=10, 
+            curl_options={CurlOpt.IPRESOLVE: 1}
+        )
         r.raise_for_status()
         return r.text
     except Exception as e_final:
