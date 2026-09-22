@@ -13,17 +13,37 @@ from .cache import stream_cache, episode_cache
 
 M3U8_RE = re.compile(r"https?://[^\s\"'<>\\]+?\.m3u8[^\s\"'<>\\]*")
 
+CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+
 def _curl_get_json_sync(url: str, headers: Optional[Dict[str,str]] = None, params: Optional[Dict[str,Any]] = None) -> Dict[str,Any]:
-    """Sync fetch via curl_cffi (chrome impersonate) to bypass Cloudflare, fallback to httpx."""
-    # try curl_cffi
+    """Fast sync fetch via httpx, falling back to curl_cffi (chrome impersonate) if needed."""
+    clean_hdrs = dict(headers or {})
+    clean_hdrs["User-Agent"] = CHROME_UA
+
+    # 1. Try httpx first (fast pooled connections)
+    import httpx as _httpx
+    try:
+        with _httpx.Client(follow_redirects=True, timeout=5) as c:
+            r = c.get(url, headers=clean_hdrs, params=params)
+            r.raise_for_status()
+            txt = r.text.strip()
+            if not txt:
+                return {}
+            try:
+                return r.json()
+            except Exception:
+                return {"_raw": txt}
+    except Exception:
+        pass
+
+    # 2. Fallback to curl_cffi with Chrome impersonation
     try:
         from curl_cffi import requests as creq
-        # curl_cffi handles params via URL building
         if params:
             from urllib.parse import urlencode
             qs = urlencode({k:v for k,v in params.items() if v is not None})
             url = url + ("&" if "?" in url else "?") + qs
-        r = creq.get(url, headers=headers or {}, impersonate="chrome", timeout=15)
+        r = creq.get(url, headers=clean_hdrs, impersonate="chrome", timeout=8)
         r.raise_for_status()
         txt = r.text.strip()
         if not txt:
@@ -32,35 +52,29 @@ def _curl_get_json_sync(url: str, headers: Optional[Dict[str,str]] = None, param
             return r.json()
         except Exception:
             return {"_raw": txt}
-    except Exception as e_curl:
-        # fallback to httpx sync
-        import httpx as _httpx
-        try:
-            with _httpx.Client(follow_redirects=True, timeout=15) as c:
-                r = c.get(url, headers=headers or {}, params=params)
-                r.raise_for_status()
-                txt = r.text.strip()
-                if not txt:
-                    return {}
-                try:
-                    return r.json()
-                except Exception:
-                    return {"_raw": txt}
-        except Exception:
-            raise e_curl
+    except Exception as e_final:
+        raise e_final
 
 def _curl_get_text_sync(url: str, headers: Optional[Dict[str,str]] = None) -> str:
+    clean_hdrs = dict(headers or {})
+    clean_hdrs["User-Agent"] = CHROME_UA
+
+    import httpx as _httpx
     try:
-        from curl_cffi import requests as creq
-        r = creq.get(url, headers=headers or {}, impersonate="chrome", timeout=15)
-        r.raise_for_status()
-        return r.text
-    except Exception as e_curl:
-        import httpx as _httpx
-        with _httpx.Client(follow_redirects=True, timeout=15) as c:
-            r = c.get(url, headers=headers or {})
+        with _httpx.Client(follow_redirects=True, timeout=5) as c:
+            r = c.get(url, headers=clean_hdrs)
             r.raise_for_status()
             return r.text
+    except Exception:
+        pass
+
+    try:
+        from curl_cffi import requests as creq
+        r = creq.get(url, headers=clean_hdrs, impersonate="chrome", timeout=8)
+        r.raise_for_status()
+        return r.text
+    except Exception as e_final:
+        raise e_final
 
 class KyotoResolver:
     """Resolves Anilab post_id -> episodes -> servers -> .m3u8 URL via regex scrape."""
@@ -85,14 +99,17 @@ class KyotoResolver:
     async def _get_json(self, url: str, params: Optional[Dict[str,Any]] = None, headers: Optional[Dict[str,str]] = None) -> Dict[str,Any]:
         c = await self._get_client()
         hdrs = headers or self.headers
-        r = await c.get(url, params=params, headers=hdrs)
-        r.raise_for_status()
-        if not r.text.strip():
-            return {}
         try:
-            return r.json()
+            r = await c.get(url, params=params, headers=hdrs)
+            r.raise_for_status()
+            if not r.text.strip():
+                return {}
+            try:
+                return r.json()
+            except Exception:
+                return {"_raw": r.text}
         except Exception:
-            return {"_raw": r.text}
+            return await asyncio.to_thread(_curl_get_json_sync, url, hdrs, params)
 
     async def _get_text(self, url: str, headers: Optional[Dict[str,str]] = None) -> str:
         c = await self._get_client()

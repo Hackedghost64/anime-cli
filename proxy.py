@@ -16,7 +16,12 @@ def get_http_client() -> httpx.AsyncClient:
     if _client is None or _client.is_closed:
         _client = httpx.AsyncClient(
             follow_redirects=True,
-            timeout=httpx.Timeout(20.0, connect=10.0),
+            limits=httpx.Limits(
+                max_connections=1000,
+                max_keepalive_connections=200,
+                keepalive_expiry=30.0
+            ),
+            timeout=httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0),
             headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                 "Referer": "https://play.app/",
@@ -95,14 +100,35 @@ async def proxy_segment(url: str = Query(...), request: Request = None):
         })
     """Stream video chunks (.ts / .xls) with CORS and range request forwarding."""
     client = get_http_client()
+    method = request.method if request else "GET"
     
     headers = {}
     if request and "range" in request.headers:
         headers["Range"] = request.headers["Range"]
 
-    method = request.method if request else "GET"
+    # Handle HEAD probes without streaming body
+    if method == "HEAD":
+        try:
+            r = await client.head(url, headers=headers)
+            res_headers = {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges",
+                "Accept-Ranges": "bytes",
+                "Content-Type": "video/mp2t",
+            }
+            if "content-length" in r.headers:
+                res_headers["Content-Length"] = r.headers["content-length"]
+            if "content-range" in r.headers:
+                res_headers["Content-Range"] = r.headers["content-range"]
+            await r.aclose()
+            return Response(status_code=r.status_code, headers=res_headers, media_type="video/mp2t")
+        except Exception as e:
+            raise HTTPException(502, f"Failed to probe segment: {e}")
+
     try:
-        req = client.build_request(method, url, headers=headers)
+        req = client.build_request("GET", url, headers=headers)
         r = await client.send(req, stream=True)
     except Exception as e:
         raise HTTPException(502, f"Failed to stream segment: {e}")
@@ -113,28 +139,29 @@ async def proxy_segment(url: str = Query(...), request: Request = None):
         "Access-Control-Allow-Headers": "*",
         "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges",
         "Accept-Ranges": "bytes",
+        "Content-Type": "video/mp2t",
+        "Cache-Control": "public, max-age=86400",
     }
     
-    for h in ["content-type", "content-length", "content-range"]:
+    for h in ["content-length", "content-range"]:
         if h in r.headers:
             response_headers[h] = r.headers[h]
-            
-    # Default to MPEG-TS if upstream sends application/vnd.ms-excel
-    if "content-type" in response_headers and "excel" in response_headers["content-type"].lower():
-        response_headers["content-type"] = "video/mp2t"
-    elif "content-type" not in response_headers:
-        response_headers["content-type"] = "video/mp2t"
 
     async def body_stream():
         try:
-            async for chunk in r.aiter_bytes(chunk_size=65536):
+            async for chunk in r.aiter_bytes(chunk_size=131072):
                 yield chunk
+        except Exception:
+            pass
         finally:
-            await r.aclose()
+            try:
+                await r.aclose()
+            except Exception:
+                pass
 
     return StreamingResponse(
         body_stream(),
         status_code=r.status_code,
         headers=response_headers,
-        media_type=response_headers.get("content-type", "video/mp2t")
+        media_type="video/mp2t"
     )

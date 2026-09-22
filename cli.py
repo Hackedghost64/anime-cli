@@ -227,22 +227,11 @@ async def cmd_terminal(
                 cur_idx = idx
                 break
 
-        # Check if episode was finished (>88% watched)
-        if last_dur > 0 and (last_pos / last_dur) >= 0.88:
-            if cur_idx + 1 < len(episodes):
-                episode = episodes[cur_idx + 1]
-                resume_position = 0.0
-                print(f"{C_GOLD}✓ Finished Episode {last_ep_num}. Auto-advancing to Episode {episode.get('num', cur_idx+2)}!{C_RESET}")
-            else:
-                episode = episodes[cur_idx]
-                resume_position = 0.0
-                print(f"{C_GOLD}You finished the latest available episode ({last_ep_num}). Replaying from start.{C_RESET}")
-        else:
-            episode = episodes[cur_idx]
-            resume_position = last_pos
-            mins = int(resume_position // 60)
-            secs = int(resume_position % 60)
-            print(f"{C_GOLD}▶ Resuming Episode {episode.get('num', last_ep_num)} at {mins:02d}:{secs:02d}{C_RESET}")
+        episode = episodes[cur_idx]
+        resume_position = last_pos
+        mins = int(resume_position // 60)
+        secs = int(resume_position % 60)
+        print(f"{C_GOLD}▶ Resuming Episode {episode.get('num', last_ep_num)} at {mins:02d}:{secs:02d}{C_RESET}")
 
     # 2. Search & Select Mode
     if not episode:
@@ -325,6 +314,13 @@ async def cmd_terminal(
     ep_name = episode.get("name") or f"Episode {ep_num}"
     print(f"{C_GREEN}Selected: #{ep_num} - {ep_name}{C_RESET}")
 
+    # Kick off AniSkip query concurrently in parallel with server extraction
+    aniskip_task = None
+    if not download:
+        aniskip_task = asyncio.create_task(
+            aniskip.get_skip_times(anime_title, int(ep_num) if ep_num.isdigit() else 1, 1440.0)
+        )
+
     # Fetch Servers
     print(f"{C_CYAN}Resolving available stream servers...{C_RESET}")
     servers = await kyoto.get_servers(anime_id, ep_id)
@@ -393,8 +389,12 @@ async def cmd_terminal(
         return
 
     # AniSkip Integration: Auto-Skip Openings in MPV
-    print(f"{C_CYAN}Querying AniSkip for opening/ending timestamps...{C_RESET}")
-    skip_data = await aniskip.get_skip_times(anime_title, int(ep_num) if ep_num.isdigit() else 1, 1440.0)
+    skip_data = {}
+    if aniskip_task:
+        try:
+            skip_data = await aniskip_task
+        except Exception:
+            skip_data = {}
 
     # Prepare MPV integration Lua script (AniSkip + Precise Playback Position Tracker)
     progress_file = f"/tmp/mpv_progress_{os.getpid()}_{anime_id}_{ep_id}.txt"
@@ -410,9 +410,9 @@ async def cmd_terminal(
         'mp.observe_property("duration", "number", function(name, val)',
         '    if val then last_dur = val end',
         'end)',
-        'local function save_pos(is_eof)',
-        '    local pos = is_eof and (last_dur > 0 and last_dur or last_pos) or mp.get_property_number("time-pos", last_pos)',
-        '    local dur = mp.get_property_number("duration", last_dur)',
+        'local function save_pos()',
+        '    local pos = mp.get_property_number("time-pos") or last_pos',
+        '    local dur = mp.get_property_number("duration") or last_dur',
         '    if pos and pos > 0 then',
         '        local f = io.open(progress_file, "w")',
         '        if f then',
@@ -421,34 +421,42 @@ async def cmd_terminal(
         '        end',
         '    end',
         'end',
-        'mp.register_event("end-file", function(e)',
-        '    if e and e.reason == "eof" then',
-        '        save_pos(true)',
-        '    else',
-        '        save_pos(false)',
-        '    end',
-        'end)',
-        'mp.register_event("shutdown", function()',
-        '    save_pos(false)',
-        'end)'
+        'mp.add_periodic_timer(2, save_pos)',
+        'mp.observe_property("pause", "bool", function(name, val) if val then save_pos() end end)',
+        'mp.register_event("shutdown", save_pos)'
     ]
 
     if skip_data.get("found") and skip_data.get("results"):
         op = next((r for r in skip_data["results"] if r.get("type") == "op"), None)
+        ed = next((r for r in skip_data["results"] if r.get("type") == "ed"), None)
         if op:
             lua_code.extend([
                 f"local op_start = {op['start']}",
                 f"local op_end = {op['end']}",
-                "local has_skipped = false",
+                "local has_skipped_op = false",
                 'mp.observe_property("time-pos", "number", function(name, val)',
-                '    if val and val >= op_start and val < op_end and not has_skipped then',
-                '        has_skipped = true',
+                '    if val and val >= op_start and val < op_end and not has_skipped_op then',
+                '        has_skipped_op = true',
                 '        mp.set_property_number("time-pos", op_end + 0.5)',
                 '        mp.osd_message("⚡ Skipped Opening Theme", 3)',
                 '    end',
                 'end)'
             ])
-            print(f"{C_GOLD}⚡ AniSkip: Auto-skip Opening armed ({op['start']}s -> {op['end']}s){C_RESET}")
+            print(f"{C_GOLD}⚡ AniSkip: Auto-skip Opening armed ({int(op['start'])}s -> {int(op['end'])}s){C_RESET}")
+        if ed:
+            lua_code.extend([
+                f"local ed_start = {ed['start']}",
+                f"local ed_end = {ed['end']}",
+                "local has_skipped_ed = false",
+                'mp.observe_property("time-pos", "number", function(name, val)',
+                '    if val and val >= ed_start and val < ed_end and not has_skipped_ed then',
+                '        has_skipped_ed = true',
+                '        mp.set_property_number("time-pos", ed_end + 0.5)',
+                '        mp.osd_message("⚡ Skipped Ending Theme", 3)',
+                '    end',
+                'end)'
+            ])
+            print(f"{C_GOLD}⚡ AniSkip: Auto-skip Ending armed ({int(ed['start'])}s -> {int(ed['end'])}s){C_RESET}")
 
     with open(lua_script_path, "w") as f:
         f.write("\n".join(lua_code))

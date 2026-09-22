@@ -14,6 +14,8 @@ async def init_db():
     global _initialized
     os.makedirs(os.path.dirname(os.path.abspath(DB_FILE)), exist_ok=True)
     async with aiosqlite.connect(DB_FILE) as db:
+        await db.execute("PRAGMA journal_mode = WAL;")
+        await db.execute("PRAGMA synchronous = NORMAL;")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS watch_progress (
                 anime_id TEXT NOT NULL,

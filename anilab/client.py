@@ -57,9 +57,9 @@ class AnilabClient:
         data = await self._get("search", params={"query": query, "page": page})
         posts = data.get("posts", []) if isinstance(data, dict) else []
         
-        # Hydrate titles and metadata in parallel for search results
+        # Hydrate titles and metadata in parallel for top search results
         if posts:
-            ids_to_fetch = [p["id"] for p in posts[:15] if isinstance(p, dict) and "id" in p]
+            ids_to_fetch = [p["id"] for p in posts[:8] if isinstance(p, dict) and "id" in p]
             detailed_list = await asyncio.gather(*[self.post(i) for i in ids_to_fetch], return_exceptions=True)
             hydrated_posts = []
             for idx, p in enumerate(posts):

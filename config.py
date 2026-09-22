@@ -1,7 +1,32 @@
 """Configuration module for anime-app."""
 from __future__ import annotations
 import os
+import socket
 from typing import Any, Dict
+
+def _patch_ipv4():
+    """If system lacks working IPv6 connectivity, prefer IPv4 to avoid 3-10s connect timeouts on dual-stack hosts."""
+    try:
+        s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        s.connect(("2001:4860:4860::8888", 80))
+        s.close()
+    except Exception:
+        _orig_getaddrinfo = socket.getaddrinfo
+        def _getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+            res = None
+            if family == 0 or family == socket.AF_UNSPEC:
+                try:
+                    res = _orig_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
+                except Exception:
+                    pass
+            if not res:
+                res = _orig_getaddrinfo(host, port, family, type, proto, flags)
+            if host == "app.kyotoplayer.com" and res:
+                res = sorted(res, key=lambda x: 1 if "104.21.87.227" in str(x[4]) else 0)
+            return res
+        socket.getaddrinfo = _getaddrinfo
+
+_patch_ipv4()
 
 class Settings:
     def __init__(self):

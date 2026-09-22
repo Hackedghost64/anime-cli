@@ -259,17 +259,10 @@ async function viewPost(id) {
 
     if (latestWatched) {
       const { ep, p } = latestWatched;
-      const isCompleted = p.duration && (p.position / p.duration) >= 0.88;
-      const idx = episodes.findIndex(e => String(e.id) === String(ep.id));
-      if (isCompleted && idx + 1 < episodes.length) {
-        continueEp = episodes[idx + 1];
-        continueLabel = `▶ Next: Episode ${continueEp.num || idx + 2}`;
-      } else {
-        continueEp = ep;
-        const m = Math.floor(p.position / 60);
-        const s = String(Math.floor(p.position % 60)).padStart(2, '0');
-        continueLabel = isCompleted ? `▶ Replay Episode ${ep.num || '1'}` : `▶ Resume Episode ${ep.num || '1'} (${m}:${s})`;
-      }
+      continueEp = ep;
+      const m = Math.floor(p.position / 60);
+      const s = String(Math.floor(p.position % 60)).padStart(2, '0');
+      continueLabel = `▶ Resume Episode ${ep.num || '1'} (${m}:${s})`;
     }
 
     let html = `
@@ -432,14 +425,7 @@ async function viewWatch(pid, epIdPref, srvPref) {
         }
       }
       if (latestWatched) {
-        const { ep, p } = latestWatched;
-        const isCompleted = p.duration && (p.position / p.duration) >= 0.88;
-        const idx = episodes.findIndex(e => String(e.id) === String(ep.id));
-        if (isCompleted && idx + 1 < episodes.length) {
-          curEp = episodes[idx + 1];
-        } else {
-          curEp = ep;
-        }
+        curEp = latestWatched.ep;
       } else {
         curEp = episodes[0];
       }
@@ -689,7 +675,7 @@ function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
   // Query saved progress
   API.getProgress(post.id).then(res => {
     const prog = res.progress && res.progress[episode.id];
-    if (prog && prog.position && prog.position > 5 && prog.duration && (prog.position / prog.duration) < 0.88) {
+    if (prog && prog.position && prog.position > 5) {
       resumeTarget = prog.position;
       tryResume();
     }
