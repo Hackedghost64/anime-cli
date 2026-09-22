@@ -1,97 +1,156 @@
-# ⚡ Shinsei Anime — Private Streaming Service
+# ⚡ anime-cli
 
-A self-hosted, private anime streaming web service inspired by **Crunchyroll**. Powered by FastAPI, reverse-engineered Anilab & Kyoto engines, and an in-browser HLS reverse proxy.
+> **Watch anime from your terminal, browser, or phone without ads, captchas, or broken scrapers.**
 
----
+I love watching anime from the command line, and tools like `ani-cli` are awesome. But let's be real: scraping pirate websites with `curl` and `grep` breaks every other week whenever those sites change their HTML layout or Cloudflare slaps you with a captcha. And you don't get episode names, synopsis, skip-intro, or an easy way to watch on your phone in bed.
 
-## ✨ Features
+So I reverse-engineered the actual mobile apps behind the scenes (Anilab & Kyoto Player) to query their JSON backend directly with Chrome TLS fingerprinting, and built **`anime-cli`**.
 
-- **In-Browser 1080p Streaming:** Custom HLS/M3U8 reverse-proxy eliminates browser CORS limitations on upstream CDN video chunks (`xlsbox.com`). No VLC required.
-- **AniSkip Integration:** Floating **"Skip Intro"** and **"Skip Outro"** buttons powered by the public AniSkip API.
-- **Sub / Dub Audio Switcher:** Effortlessly switch between Japanese (Sub) and English (Dub) streams on the fly.
-- **Server Failover:** Multiple stream servers per episode with automatic fallback.
-- **Watch History & "Continue Watching":** Tracks your exact watch timestamps in a local SQLite database (`anime.db`) and displays a "Continue Watching" carousel on the home page.
-- **Watchlist (My List):** Save anime to your personal watchlist.
-- **Mobile & TV Optimized:** Responsive design with full keyboard shortcuts (Space, Arrow keys, F for fullscreen, N for next episode).
-- **Free Cloud Deployment:** Ready to deploy to **Hugging Face Spaces** for 100% free 24/7 cloud hosting without keeping your PC on.
+It gives you:
+1. An **interactive terminal player** (like `ani-cli`, but 10x faster with 1080p and **auto-skipping anime openings in MPV**).
+2. A **self-hosted Crunchyroll-style web app** with watch progress, resume playback, and Sub/Dub toggling.
+3. A **zero-config public share tunnel** (`--share`) that prints a QR code in your terminal so you can watch on your phone from anywhere.
 
 ---
 
-## 🚀 Quick Start (Local)
+## 🚀 Quick Install
 
-### 1. Install Dependencies
+### Prerequisites
+Make sure you have `python3` (3.9+) and `mpv` installed:
+
 ```bash
-pip install -r requirements.txt
+# Ubuntu / Debian / Mint
+sudo apt update && sudo apt install -y mpv fzf ffmpeg python3-pip
+
+# Arch Linux
+sudo pacman -S mpv fzf ffmpeg python-pip
+
+# macOS (Homebrew)
+brew install mpv fzf ffmpeg python
 ```
 
-### 2. Run the Server
+### Install anime-cli
+
 ```bash
-./run.sh
-# OR manually:
-python3 main.py
-```
-Open [http://localhost:8000](http://localhost:8000) in your browser.
+# Clone the repo
+git clone https://github.com/Hackedghost64/anime-cli.git
+cd anime-cli
 
-### 3. Access Across Your Home Wi-Fi
-To watch from your phone, tablet, or TV, find your PC's local IP (e.g. `192.168.1.50`) and open:
+# Install it (adds 'anime-cli' to your terminal PATH)
+pip install --user .
 ```
-http://192.168.1.50:8000
+
+*Make sure `~/.local/bin` is in your `$PATH` (if it isn't already, add `export PATH="$HOME/.local/bin:$PATH"` to your `~/.bashrc` or `~/.zshrc`).*
+
+---
+
+## 🍿 How to Use It
+
+### 1. Watch in Terminal (Like ani-cli, but way better)
+
+Just type the anime name:
+
+```bash
+anime-cli "chainsaw man"
+```
+Or just type `anime-cli` to search interactively with fuzzy search (`fzf`):
+* Select the anime from search results.
+* Pick your episode (with actual episode names and numbers!).
+* Choose **SUB** or **DUB** (`-d` / `--dub` to default to English Dub).
+* **⚡ AniSkip Auto-Skip:** It automatically looks up the opening/ending timestamps and tells MPV to **skip the intro theme automatically** without you touching a key!
+
+Resume where you left off:
+```bash
+anime-cli terminal -c
+```
+
+Download episodes in 1080p MP4 for offline viewing:
+```bash
+anime-cli terminal "solo leveling" -o
 ```
 
 ---
 
-## 🐳 Docker Deployment
+### 2. Browser Mode (Your Private Crunchyroll)
 
-### Run with Docker Compose:
+Want a clean, dark-mode Netflix/Crunchyroll UI in your browser with zero ads?
+
+```bash
+anime-cli browser
+```
+This boots up the local streaming engine and automatically opens `http://localhost:8000` in your browser:
+* **"Continue Watching"** carousel with saved progress bars and resume points.
+* Custom video player with **"Skip Intro"** buttons, quality picker, and episode navigator.
+* **Watchlist** to save your favorite shows.
+* Native in-browser 1080p playback via an internal HLS reverse-proxy (no VLC popups needed).
+
+---
+
+### 3. The Money Command: `--share` 💰
+
+Wanna lie down in bed and watch on your phone or share a stream with a friend?
+
+```bash
+anime-cli browser --share
+```
+This automatically spins up a secure public HTTPS tunnel and **prints an ASCII QR code right in your terminal**:
+1. Point your phone camera at your terminal screen.
+2. Tap the link.
+3. Bam—you're watching your anime on mobile data or outside home with full sync!
+
+---
+
+### 4. Android Phone Mode via USB (`anime-cli mobile`)
+
+If you have an Android phone plugged into your PC via USB:
+
+```bash
+anime-cli mobile
+```
+It uses ADB to set up zero-latency reverse port forwarding, **wakes up your phone, and automatically launches the app in your phone's browser**. If no phone is plugged in, it generates the Wi-Fi link and QR code for you.
+
+---
+
+### 5. Headless Server Mode
+
+If you're running this on a home server, Raspberry Pi, or Docker:
+
+```bash
+anime-cli stream -p 8000
+```
+Or run it with Docker:
 ```bash
 docker-compose up -d
 ```
-The database will persist in `./data/anime.db`.
 
 ---
 
-## ☁️ Deploy to Hugging Face Spaces (Free 24/7 Cloud)
+## ⌨️ MPV Shortcuts (Terminal Mode)
 
-You can host this for free on Hugging Face Spaces so you don't have to keep your PC turned on:
-
-1. Create a new Space on [Hugging Face](https://huggingface.co/spaces) with **Docker** SDK (CPU Basic is free).
-2. Push or upload this repo.
-3. Hugging Face builds the Docker container and gives you a free HTTPS URL (e.g. `https://username-space.hf.space`).
-4. Read [`HUGGINGFACE_DEPLOYMENT.md`](HUGGINGFACE_DEPLOYMENT.md) for step-by-step instructions.
+| Key | Action |
+| --- | --- |
+| `Space` | Play / Pause |
+| `→` / `←` | Seek 5 seconds forward / backward |
+| `f` | Toggle Fullscreen |
+| `m` | Mute Audio |
+| `9` / `0` | Decrease / Increase Volume |
+| `q` | Quit (saves watch progress automatically) |
 
 ---
 
-## ⚙️ Running as a System Service on Linux (Auto-Start on PC Boot)
+## 💡 How It Works Under the Hood
 
-If you want the server to start automatically whenever your PC turns on:
+- **Direct Reverse-Engineered APIs:** Instead of scraping ad-filled HTML websites, this talks directly to the mobile app backend via JSON.
+- **Cloudflare Bypass:** Uses `curl_cffi` to mimic a genuine Google Chrome TLS fingerprint so the stream resolver never gets blocked.
+- **HLS Reverse Proxy:** Rewrites `.m3u8` playlists and video chunks on the fly with permissive CORS headers so browsers can play raw video without cross-origin blocks.
+- **SQLite Database:** Stores your watch progress, timestamps, and bookmarks locally in `data/anime.db`.
 
-1. Create a systemd service file:
-```bash
-sudo nano /etc/systemd/system/anime-app.service
-```
+---
 
-2. Paste the following configuration (replace `/home/divyam/Downloads/projects/anime-app` with your path):
-```ini
-[Unit]
-Description=Shinsei Anime Streaming Service
-After=network.target
+## 📜 Disclaimer
+This project is an educational tool that demonstrates API reverse engineering and HLS proxying. All anime content and streams belong to their respective copyright owners. Please support official releases whenever possible!
 
-[Service]
-Type=simple
-User=divyam
-WorkingDirectory=/home/divyam/Downloads/projects/anime-app
-ExecStart=/usr/bin/python3 /home/divyam/Downloads/projects/anime-app/main.py
-Restart=always
-RestartSec=5
+---
 
-[Install]
-WantedBy=multi-user.target
-```
-
-3. Enable and start the service:
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now anime-app.service
-```
-
-Now the server will run silently in the background whenever your PC boots!
+### ⭐ Give it a star if you find it useful!
+Feel free to open issues, submit PRs, or suggest new features!
