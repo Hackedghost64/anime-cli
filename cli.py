@@ -104,23 +104,42 @@ def start_cloudflared_tunnel(port: int) -> Optional[tuple[subprocess.Popen, str]
     if not os.path.exists(cf_bin):
         return None
 
-    cmd = [cf_bin, "tunnel", "--url", f"http://localhost:{port}"]
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    log_path = f"/tmp/cf_tunnel_{port}.log"
+    if os.path.exists(log_path):
+        try:
+            os.remove(log_path)
+        except Exception:
+            pass
+
+    cmd = [
+        cf_bin, "tunnel", 
+        "--url", f"http://127.0.0.1:{port}", 
+        "--logfile", log_path
+    ]
+    p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     url = None
     start = time.time()
-    while time.time() - start < 15:
-        line = p.stderr.readline()
-        if line:
-            import re
-            m = re.search(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com", line)
-            if m:
-                url = m.group(0)
-                break
+    import re
+    while time.time() - start < 20:
+        time.sleep(0.5)
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, "r", errors="ignore") as f:
+                    content = f.read()
+                    if not url:
+                        m = re.search(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com", content)
+                        if m:
+                            url = m.group(0)
+                    if url and "Registered tunnel connection" in content:
+                        break
+            except Exception:
+                pass
         if p.poll() is not None:
             break
 
     if url:
+        time.sleep(1.0)
         return p, url
     p.terminate()
     return None
@@ -165,6 +184,8 @@ def cmd_browser(port: int = 8000, share: bool = False, open_browser: bool = True
     else:
         print(f"\n{C_DIM}Scan QR to stream on phone over home Wi-Fi:{C_RESET}")
         print_qr_code(wifi_url)
+        print(f"{C_DIM}💡 Tip: If phone says 'site can't be reached' on Wi-Fi, run: sudo ufw allow {port}/tcp{C_RESET}")
+        print(f"{C_DIM}         Or stream with zero-config public tunnel: anime-cli -s{C_RESET}\n")
 
     # Launch browser
     if open_browser:
@@ -618,7 +639,7 @@ def main():
     elif args.share or (args.query == "share"):
         cmd_browser(port=args.port, share=True)
     elif args.browser or (args.query == "browser"):
-        cmd_browser(port=args.port, share=False)
+        cmd_browser(port=args.port, share=args.share)
     elif args.continue_last:
         asyncio.run(cmd_terminal(continue_last=True, dub_pref=dub_pref, download=args.download))
     elif args.query:
