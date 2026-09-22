@@ -403,6 +403,7 @@ def main():
         description="⚡ Next-Gen Anime Streaming & Browser CLI",
         formatter_class=argparse.RawTextHelpFormatter
     )
+    parser.add_argument("-v", "--version", action="version", version="anime-cli 1.0.0")
 
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
