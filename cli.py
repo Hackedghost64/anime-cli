@@ -139,6 +139,22 @@ def start_cloudflared_tunnel(port: int) -> Optional[tuple[subprocess.Popen, str]
             break
 
     if url:
+        # Verify Cloudflare DNS propagation via DoH so phone never hits NXDOMAIN
+        m = re.search(r"https://([a-zA-Z0-9\-]+\.trycloudflare\.com)", url)
+        if m:
+            domain = m.group(1)
+            import urllib.request, json
+            for _ in range(12):
+                try:
+                    doh_url = f"https://1.1.1.1/dns-query?name={domain}&type=A"
+                    req = urllib.request.Request(doh_url, headers={"Accept": "application/dns-json"})
+                    with urllib.request.urlopen(req, timeout=2.0) as resp:
+                        d = json.loads(resp.read().decode())
+                        if d.get("Status") == 0 and d.get("Answer"):
+                            break
+                except Exception:
+                    pass
+                time.sleep(1.0)
         time.sleep(1.0)
         return p, url
     p.terminate()
