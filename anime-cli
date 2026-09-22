@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+TARGET="${BASH_SOURCE[0]}"
+while [ -L "$TARGET" ]; do
+  DIR="$(cd -P "$(dirname "$TARGET")" && pwd)"
+  TARGET="$(readlink "$TARGET")"
+  [[ $TARGET != /* ]] && TARGET="$DIR/$TARGET"
+done
+DIR="$(cd -P "$(dirname "$TARGET")" && pwd)"
+exec python3 "$DIR/cli.py" "$@"

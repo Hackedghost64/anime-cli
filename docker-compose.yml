@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  anime-app:
+    build: .
+    container_name: anime-app
+    restart: unless-stopped
+    ports:
+      - "8000:7860"
+    environment:
+      - PORT=7860
+      - HOST=0.0.0.0
+    volumes:
+      - ./data:/app/data
