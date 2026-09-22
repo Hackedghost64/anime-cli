@@ -38,6 +38,8 @@ const API = {
 let currentHls = null;
 let progressInterval = null;
 let activeSkipIntervals = [];
+let currentPost = null;
+let currentEp = null;
 
 function toast(msg, ms = 3000) {
   const c = document.getElementById('toast-container');
@@ -241,6 +243,35 @@ async function viewPost(id) {
     const seasons = post.seasons || [];
     const genres = (post.genres || '').split(',').map(g => g.trim()).filter(Boolean);
 
+    // Compute continue watching episode and label
+    let continueEp = episodes[0];
+    let continueLabel = '▶ Start Watching Episode 1';
+    let latestWatched = null;
+    let latestTime = 0;
+
+    for (const ep of episodes) {
+      const p = progressMap[String(ep.id)];
+      if (p && p.updated_at > latestTime) {
+        latestTime = p.updated_at;
+        latestWatched = { ep, p };
+      }
+    }
+
+    if (latestWatched) {
+      const { ep, p } = latestWatched;
+      const isCompleted = p.duration && (p.position / p.duration) >= 0.88;
+      const idx = episodes.findIndex(e => String(e.id) === String(ep.id));
+      if (isCompleted && idx + 1 < episodes.length) {
+        continueEp = episodes[idx + 1];
+        continueLabel = `▶ Next: Episode ${continueEp.num || idx + 2}`;
+      } else {
+        continueEp = ep;
+        const m = Math.floor(p.position / 60);
+        const s = String(Math.floor(p.position % 60)).padStart(2, '0');
+        continueLabel = isCompleted ? `▶ Replay Episode ${ep.num || '1'}` : `▶ Resume Episode ${ep.num || '1'} (${m}:${s})`;
+      }
+    }
+
     let html = `
       <a href="#/" style="display:inline-flex;align-items:center;gap:6px;color:var(--text-dim);font-weight:600;margin-bottom:20px;">
         ← Back to Catalog
@@ -277,8 +308,8 @@ async function viewPost(id) {
           <p class="detail-synopsis">${esc(post.overview || 'No synopsis available.')}</p>
 
           ${episodes.length ? `
-            <a href="#/watch/${id}?ep=${episodes[0].id}" class="btn btn-primary" style="padding:14px 28px;font-size:16px;">
-              ▶ Start Watching Episode 1
+            <a href="#/watch/${id}?ep=${continueEp.id}" class="btn btn-primary" style="padding:14px 28px;font-size:16px;">
+              ${esc(continueLabel)}
             </a>
           ` : ''}
         </div>
@@ -372,9 +403,10 @@ async function viewWatch(pid, epIdPref, srvPref) {
   `);
 
   try {
-    const [postData, episodesData] = await Promise.all([
+    const [postData, episodesData, progData] = await Promise.all([
       API.post(pid),
-      API.episodes(pid)
+      API.episodes(pid),
+      API.getProgress(pid).catch(() => ({ progress: {} }))
     ]);
 
     const post = postData.data || {};
@@ -383,7 +415,35 @@ async function viewWatch(pid, epIdPref, srvPref) {
       throw new Error("No episodes found for this anime.");
     }
 
-    const curEp = episodes.find(e => String(e.id) === String(epIdPref)) || episodes[0];
+    const progressMap = progData.progress || {};
+    let curEp = null;
+    if (epIdPref) {
+      curEp = episodes.find(e => String(e.id) === String(epIdPref));
+    }
+    if (!curEp) {
+      // Find latest watched episode
+      let latestWatched = null;
+      let latestTime = 0;
+      for (const ep of episodes) {
+        const p = progressMap[String(ep.id)];
+        if (p && p.updated_at > latestTime) {
+          latestTime = p.updated_at;
+          latestWatched = { ep, p };
+        }
+      }
+      if (latestWatched) {
+        const { ep, p } = latestWatched;
+        const isCompleted = p.duration && (p.position / p.duration) >= 0.88;
+        const idx = episodes.findIndex(e => String(e.id) === String(ep.id));
+        if (isCompleted && idx + 1 < episodes.length) {
+          curEp = episodes[idx + 1];
+        } else {
+          curEp = ep;
+        }
+      } else {
+        curEp = episodes[0];
+      }
+    }
 
     render(`
       <div style="margin-bottom:14px;">
@@ -552,6 +612,44 @@ function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
   if (!video) return;
 
   cleanUpPlayer();
+  currentPost = post;
+  currentEp = episode;
+
+  // Function to save progress
+  function saveCurrentProgress(isFinished = false) {
+    if (!video || !video.duration) return;
+    const pos = isFinished ? video.duration : video.currentTime;
+    if (pos > 5) {
+      API.saveProgress({
+        anime_id: String(post.id),
+        ep_id: String(episode.id),
+        position: pos,
+        duration: video.duration,
+        anime_title: post.title || '',
+        anime_poster: post.poster || '',
+        ep_num: String(episode.num || ''),
+        ep_name: episode.name || ''
+      }).catch(() => {});
+    }
+  }
+
+  // Restore watch progress
+  let resumeTarget = 0;
+  let resumeApplied = false;
+
+  function tryResume() {
+    if (!resumeApplied && resumeTarget > 5 && video.duration && video.readyState >= 1) {
+      resumeApplied = true;
+      video.currentTime = resumeTarget;
+      const m = Math.floor(resumeTarget / 60);
+      const s = String(Math.floor(resumeTarget % 60)).padStart(2, '0');
+      toast(`Resumed playback at ${m}:${s}`);
+    }
+  }
+
+  video.addEventListener('loadedmetadata', tryResume);
+  video.addEventListener('canplay', tryResume);
+  video.addEventListener('playing', tryResume);
 
   if (Hls.isSupported()) {
     currentHls = new Hls({
@@ -588,12 +686,12 @@ function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
     });
   }
 
-  // Restore watch progress
+  // Query saved progress
   API.getProgress(post.id).then(res => {
     const prog = res.progress && res.progress[episode.id];
-    if (prog && prog.position && prog.position > 10 && prog.duration && (prog.position / prog.duration) < 0.9) {
-      video.currentTime = prog.position;
-      toast(`Resumed playback at ${Math.floor(prog.position / 60)}:${String(Math.floor(prog.position % 60)).padStart(2, '0')}`);
+    if (prog && prog.position && prog.position > 5 && prog.duration && (prog.position / prog.duration) < 0.88) {
+      resumeTarget = prog.position;
+      tryResume();
     }
   }).catch(() => {});
 
@@ -629,24 +727,18 @@ function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
     }
   };
 
-  // Sync Progress to SQLite every 5 seconds
+  // Sync Progress when paused or every 5 seconds
+  video.addEventListener('pause', () => saveCurrentProgress(false));
+
   progressInterval = setInterval(() => {
-    if (!video.paused && video.currentTime > 5 && video.duration) {
-      API.saveProgress({
-        anime_id: String(post.id),
-        ep_id: String(episode.id),
-        position: video.currentTime,
-        duration: video.duration,
-        anime_title: post.title || '',
-        anime_poster: post.poster || '',
-        ep_num: String(episode.num || ''),
-        ep_name: episode.name || ''
-      }).catch(() => {});
+    if (!video.paused) {
+      saveCurrentProgress(false);
     }
   }, 5000);
 
   // Auto-play Next Episode on ended
   video.onended = () => {
+    saveCurrentProgress(true);
     if (nextEpisode) {
       toast('Episode ended. Loading next episode...', 3000);
       setTimeout(() => {
@@ -685,6 +777,19 @@ function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
 }
 
 function cleanUpPlayer() {
+  const video = document.getElementById('animePlayer');
+  if (video && video.currentTime > 5 && video.duration && currentPost && currentEp) {
+    API.saveProgress({
+      anime_id: String(currentPost.id),
+      ep_id: String(currentEp.id),
+      position: video.currentTime,
+      duration: video.duration,
+      anime_title: currentPost.title || '',
+      anime_poster: currentPost.poster || '',
+      ep_num: String(currentEp.num || ''),
+      ep_name: currentEp.name || ''
+    }).catch(() => {});
+  }
   if (currentHls) {
     currentHls.destroy();
     currentHls = null;
@@ -695,6 +800,24 @@ function cleanUpPlayer() {
   }
   window.onkeydown = null;
 }
+
+// Ensure progress is sent even if window or tab is closed
+window.addEventListener('pagehide', () => {
+  const video = document.getElementById('animePlayer');
+  if (video && video.currentTime > 5 && video.duration && currentPost && currentEp) {
+    const payload = JSON.stringify({
+      anime_id: String(currentPost.id),
+      ep_id: String(currentEp.id),
+      position: video.currentTime,
+      duration: video.duration,
+      anime_title: currentPost.title || '',
+      anime_poster: currentPost.poster || '',
+      ep_num: String(currentEp.num || ''),
+      ep_name: currentEp.name || ''
+    });
+    navigator.sendBeacon('/api/user/progress', new Blob([payload], { type: 'application/json' }));
+  }
+});
 
 // 4. Watchlist View
 async function viewWatchlist() {

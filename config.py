@@ -31,10 +31,28 @@ class Settings:
             "User-Agent": "okhttp/4.12.0"
         }
         
-        # Database
-        data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-        os.makedirs(data_dir, exist_ok=True)
-        self.db_path = os.environ.get("DATABASE_PATH", os.path.join(data_dir, "anime.db"))
+        # Database in standard user data dir (~/.local/share/anime-cli/anime.db)
+        user_data_dir = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
+        app_data_dir = os.path.join(user_data_dir, "anime-cli")
+        os.makedirs(app_data_dir, exist_ok=True)
+        default_db = os.path.join(app_data_dir, "anime.db")
+
+        # Migrate from old locations if standard db does not exist yet
+        if not os.path.exists(default_db):
+            old_candidates = [
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "anime.db"),
+                os.path.expanduser("~/.local/lib/python3.10/site-packages/data/anime.db")
+            ]
+            for old_path in old_candidates:
+                if os.path.exists(old_path):
+                    import shutil
+                    try:
+                        shutil.copy2(old_path, default_db)
+                        break
+                    except Exception:
+                        pass
+
+        self.db_path = os.environ.get("DATABASE_PATH", default_db)
 
     def get(self, key: str, default: Any = None) -> Any:
         mapping = {

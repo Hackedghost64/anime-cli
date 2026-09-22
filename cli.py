@@ -191,70 +191,139 @@ async def cmd_terminal(
     anilab = AnilabClient()
     kyoto = KyotoResolver()
 
-    # Continue watching mode
+    anime_id = None
+    anime_title = None
+    anime_poster = ""
+    episode = None
+    episodes = []
+    resume_position = 0.0
+
+    # 1. Continue watching mode
     if continue_last:
         items = await db.get_continue_watching(limit=1)
-        if items:
-            last = items[0]
-            print(f"{C_GREEN}Resuming: {C_BOLD}{last.get('anime_title')}{C_RESET} (Episode {last.get('ep_num')})")
-            query = last.get('anime_title')
-        else:
+        if not items:
             print(f"{C_RED}No watch history found. Please search for an anime title.{C_RESET}")
+            return
+        last = items[0]
+        anime_id = str(last.get("anime_id"))
+        anime_title = last.get("anime_title") or f"Anime #{anime_id}"
+        anime_poster = last.get("anime_poster", "")
+        last_ep_id = str(last.get("ep_id", ""))
+        last_ep_num = str(last.get("ep_num", "1"))
+        last_pos = float(last.get("position", 0.0))
+        last_dur = float(last.get("duration", 0.0))
 
-    # Search query prompt if not provided
-    if not query:
-        query = input(f"{C_ORANGE}{C_BOLD}Search Anime > {C_RESET}").strip()
+        print(f"\n{C_GREEN}Found Continue Watching: {C_BOLD}{anime_title}{C_RESET}")
+        print(f"{C_CYAN}Fetching episode list...{C_RESET}")
+        episodes = await kyoto.get_episodes(anime_id)
+        if not episodes:
+            print(f"{C_RED}No episodes available for this title.{C_RESET}")
+            return
+
+        # Locate last watched episode
+        cur_idx = 0
+        for idx, ep in enumerate(episodes):
+            if str(ep.get("id")) == last_ep_id or str(ep.get("num")) == last_ep_num:
+                cur_idx = idx
+                break
+
+        # Check if episode was finished (>88% watched)
+        if last_dur > 0 and (last_pos / last_dur) >= 0.88:
+            if cur_idx + 1 < len(episodes):
+                episode = episodes[cur_idx + 1]
+                resume_position = 0.0
+                print(f"{C_GOLD}✓ Finished Episode {last_ep_num}. Auto-advancing to Episode {episode.get('num', cur_idx+2)}!{C_RESET}")
+            else:
+                episode = episodes[cur_idx]
+                resume_position = 0.0
+                print(f"{C_GOLD}You finished the latest available episode ({last_ep_num}). Replaying from start.{C_RESET}")
+        else:
+            episode = episodes[cur_idx]
+            resume_position = last_pos
+            mins = int(resume_position // 60)
+            secs = int(resume_position % 60)
+            print(f"{C_GOLD}▶ Resuming Episode {episode.get('num', last_ep_num)} at {mins:02d}:{secs:02d}{C_RESET}")
+
+    # 2. Search & Select Mode
+    if not episode:
         if not query:
-            print("No query entered. Exiting.")
+            query = input(f"{C_ORANGE}{C_BOLD}Search Anime > {C_RESET}").strip()
+            if not query:
+                print("No query entered. Exiting.")
+                return
+
+        print(f"\n{C_CYAN}Searching catalog for '{query}'...{C_RESET}")
+        results = await anilab.search(query)
+        if not results:
+            print(f"{C_RED}No anime found matching '{query}'.{C_RESET}")
             return
 
-    print(f"\n{C_CYAN}Searching catalog for '{query}'...{C_RESET}")
-    results = await anilab.search(query)
-    if not results:
-        print(f"{C_RED}No anime found matching '{query}'.{C_RESET}")
-        return
+        if len(results) == 1:
+            anime = results[0]
+        else:
+            options = []
+            for p in results:
+                t = p.get('title') or f"Anime #{p.get('id')}"
+                typ = p.get('type') or 'TV'
+                sc = f"★{p.get('score')}" if p.get('score') else ""
+                options.append(f"{t} ({typ}) {sc}".strip())
 
-    # Select Anime
-    anime = None
-    if len(results) == 1:
-        anime = results[0]
-    else:
-        options = []
-        for p in results:
-            t = p.get('title') or f"Anime #{p.get('id')}"
-            typ = p.get('type') or 'TV'
-            sc = f"★{p.get('score')}" if p.get('score') else ""
-            options.append(f"{t} ({typ}) {sc}".strip())
+            sel_idx = fzf_select(options, prompt="Select Anime > ")
+            if sel_idx is None:
+                return
+            anime = results[sel_idx]
 
-        sel_idx = fzf_select(options, prompt="Select Anime > ")
-        if sel_idx is None:
+        anime_id = str(anime.get("id"))
+        anime_title = anime.get("title") or f"Anime {anime_id}"
+        anime_poster = anime.get("poster", "")
+        print(f"\n{C_GREEN}Selected: {C_BOLD}{anime_title}{C_RESET}")
+
+        # Fetch episodes
+        print(f"{C_CYAN}Fetching episode list...{C_RESET}")
+        episodes = await kyoto.get_episodes(anime_id)
+        if not episodes:
+            print(f"{C_RED}No episodes available for this title.{C_RESET}")
             return
-        anime = results[sel_idx]
 
-    anime_id = str(anime.get("id"))
-    anime_title = anime.get("title") or f"Anime {anime_id}"
-    print(f"\n{C_GREEN}Selected: {C_BOLD}{anime_title}{C_RESET}")
+        # Fetch saved progress to show tags in episode list
+        prog_map = await db.get_anime_progress(anime_id)
 
-    # Fetch episodes
-    print(f"{C_CYAN}Fetching episode list...{C_RESET}")
-    episodes = await kyoto.get_episodes(anime_id)
-    if not episodes:
-        print(f"{C_RED}No episodes available for this title.{C_RESET}")
-        return
+        ep_options = []
+        for e in episodes:
+            num = str(e.get('num', '?'))
+            name = e.get('name') or f"Episode {num}"
+            tag = ""
+            p = prog_map.get(str(e.get("id")))
+            if p:
+                pos = float(p.get("position", 0.0))
+                dur = float(p.get("duration", 0.0))
+                if dur > 0 and (pos / dur) >= 0.88:
+                    tag = " [WATCHED]"
+                elif pos > 10:
+                    tag = f" [{int(pos//60):02d}:{int(pos%60):02d}]"
+            ep_options.append(f"#{num} - {name}{tag}")
 
-    # Select Episode
-    ep_options = [
-        f"#{e.get('num', '?')} - {e.get('name') or 'Episode ' + str(e.get('num'))}"
-        for e in episodes
-    ]
-    ep_idx = fzf_select(ep_options, prompt=f"Select Episode (1-{len(episodes)}) > ")
-    if ep_idx is None:
-        return
+        ep_idx = fzf_select(ep_options, prompt=f"Select Episode (1-{len(episodes)}) > ")
+        if ep_idx is None:
+            return
 
-    episode = episodes[ep_idx]
+        episode = episodes[ep_idx]
+
+        # Check if selected episode has resume position
+        p = prog_map.get(str(episode.get("id")))
+        if p:
+            pos = float(p.get("position", 0.0))
+            dur = float(p.get("duration", 0.0))
+            if pos > 10 and (dur == 0 or (pos / dur) < 0.88):
+                resume_position = pos
+                mins = int(resume_position // 60)
+                secs = int(resume_position % 60)
+                print(f"{C_GOLD}▶ Saved progress found: resuming at {mins:02d}:{secs:02d}{C_RESET}")
+
     ep_id = str(episode.get("id"))
     ep_num = str(episode.get("num", "1"))
-    print(f"{C_GREEN}Selected: {ep_options[ep_idx]}{C_RESET}")
+    ep_name = episode.get("name") or f"Episode {ep_num}"
+    print(f"{C_GREEN}Selected: #{ep_num} - {ep_name}{C_RESET}")
 
     # Fetch Servers
     print(f"{C_CYAN}Resolving available stream servers...{C_RESET}")
@@ -326,26 +395,63 @@ async def cmd_terminal(
     # AniSkip Integration: Auto-Skip Openings in MPV
     print(f"{C_CYAN}Querying AniSkip for opening/ending timestamps...{C_RESET}")
     skip_data = await aniskip.get_skip_times(anime_title, int(ep_num) if ep_num.isdigit() else 1, 1440.0)
-    
-    lua_script_path = None
+
+    # Prepare MPV integration Lua script (AniSkip + Precise Playback Position Tracker)
+    progress_file = f"/tmp/mpv_progress_{os.getpid()}_{anime_id}_{ep_id}.txt"
+    lua_script_path = f"/tmp/anime_mpv_{os.getpid()}_{anime_id}_{ep_id}.lua"
+
+    lua_code = [
+        f'local progress_file = "{progress_file}"',
+        'local last_pos = 0',
+        'local last_dur = 0',
+        'mp.observe_property("time-pos", "number", function(name, val)',
+        '    if val then last_pos = val end',
+        'end)',
+        'mp.observe_property("duration", "number", function(name, val)',
+        '    if val then last_dur = val end',
+        'end)',
+        'local function save_pos(is_eof)',
+        '    local pos = is_eof and (last_dur > 0 and last_dur or last_pos) or mp.get_property_number("time-pos", last_pos)',
+        '    local dur = mp.get_property_number("duration", last_dur)',
+        '    if pos and pos > 0 then',
+        '        local f = io.open(progress_file, "w")',
+        '        if f then',
+        '            f:write(string.format("%.2f %.2f", pos, dur or 0))',
+        '            f:close()',
+        '        end',
+        '    end',
+        'end',
+        'mp.register_event("end-file", function(e)',
+        '    if e and e.reason == "eof" then',
+        '        save_pos(true)',
+        '    else',
+        '        save_pos(false)',
+        '    end',
+        'end)',
+        'mp.register_event("shutdown", function()',
+        '    save_pos(false)',
+        'end)'
+    ]
+
     if skip_data.get("found") and skip_data.get("results"):
         op = next((r for r in skip_data["results"] if r.get("type") == "op"), None)
         if op:
-            lua_script_path = f"/tmp/aniskip_{anime_id}_{ep_num}.lua"
-            with open(lua_script_path, "w") as f:
-                f.write(f"""
-local op_start = {op['start']}
-local op_end = {op['end']}
-local has_skipped = false
-mp.observe_property("time-pos", "number", function(name, val)
-    if val and val >= op_start and val < op_end and not has_skipped then
-        has_skipped = true
-        mp.set_property_number("time-pos", op_end + 0.5)
-        mp.osd_message("⚡ Skipped Opening Theme", 3)
-    end
-end)
-""")
+            lua_code.extend([
+                f"local op_start = {op['start']}",
+                f"local op_end = {op['end']}",
+                "local has_skipped = false",
+                'mp.observe_property("time-pos", "number", function(name, val)',
+                '    if val and val >= op_start and val < op_end and not has_skipped then',
+                '        has_skipped = true',
+                '        mp.set_property_number("time-pos", op_end + 0.5)',
+                '        mp.osd_message("⚡ Skipped Opening Theme", 3)',
+                '    end',
+                'end)'
+            ])
             print(f"{C_GOLD}⚡ AniSkip: Auto-skip Opening armed ({op['start']}s -> {op['end']}s){C_RESET}")
+
+    with open(lua_script_path, "w") as f:
+        f.write("\n".join(lua_code))
 
     # Launch MPV
     mpv_bin = shutil.which("mpv")
@@ -359,32 +465,55 @@ end)
         "--hwdec=auto",
         "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "--referrer=https://play.app/",
+        f"--script={lua_script_path}",
         stream_url
     ]
-    if lua_script_path and os.path.exists(lua_script_path):
-        mpv_cmd.append(f"--script={lua_script_path}")
+
+    if resume_position > 10:
+        mpv_cmd.insert(len(mpv_cmd) - 1, f"--start={int(resume_position)}")
 
     print(f"\n{C_GREEN}{C_BOLD}▶ Playing in MPV... (Press 'q' to quit, Space to pause, arrows to seek){C_RESET}")
     try:
         subprocess.run(mpv_cmd)
     finally:
-        if lua_script_path and os.path.exists(lua_script_path):
+        # Read exact time-pos and duration captured by Lua hook
+        final_pos = 0.0
+        final_dur = 0.0
+        if os.path.exists(progress_file):
+            try:
+                with open(progress_file, "r") as f:
+                    parts = f.read().strip().split()
+                    if len(parts) >= 2:
+                        final_pos = float(parts[0])
+                        final_dur = float(parts[1])
+            except Exception:
+                pass
+            try:
+                os.remove(progress_file)
+            except Exception:
+                pass
+
+        if os.path.exists(lua_script_path):
             try:
                 os.remove(lua_script_path)
             except Exception:
                 pass
 
-        # Save watch progress to SQLite
-        await db.save_progress(
-            anime_id=anime_id,
-            ep_id=ep_id,
-            position=1440.0,
-            duration=1440.0,
-            anime_title=anime_title,
-            anime_poster=anime.get("poster", ""),
-            ep_num=ep_num,
-            ep_name=episode.get("name", "")
-        )
+        # Save actual watch progress to SQLite
+        if final_pos > 5 and final_dur > 0:
+            await db.save_progress(
+                anime_id=anime_id,
+                ep_id=ep_id,
+                position=final_pos,
+                duration=final_dur,
+                anime_title=anime_title,
+                anime_poster=anime_poster,
+                ep_num=ep_num,
+                ep_name=ep_name
+            )
+            mins = int(final_pos // 60)
+            secs = int(final_pos % 60)
+            print(f"\n{C_GREEN}✓ Saved watch progress: Episode {ep_num} at {mins:02d}:{secs:02d}{C_RESET}")
 
 # -----------------------------------------------------------------------------
 # Main Interactive Menu
