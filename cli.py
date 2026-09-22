@@ -446,9 +446,9 @@ def main():
         dub_pref = False
 
     # Dispatch based on simple flags
-    if args.server:
+    if args.server or args.query in ("server", "serve", "stream"):
         cmd_stream(port=args.port)
-    elif args.share:
+    elif args.share or (args.query == "share"):
         cmd_browser(port=args.port, share=True)
     elif args.browser or (args.query == "browser"):
         cmd_browser(port=args.port, share=False)
