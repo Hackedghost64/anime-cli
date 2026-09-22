@@ -46,7 +46,14 @@ app.include_router(skip_router, prefix="/api")
 
 # Static files directory
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
-os.makedirs(STATIC_DIR, exist_ok=True)
+if not os.path.exists(STATIC_DIR) or not os.path.exists(os.path.join(STATIC_DIR, "index.html")):
+    try:
+        import anilab
+        alt_static = os.path.join(os.path.dirname(os.path.abspath(anilab.__file__)), "static")
+        if os.path.exists(alt_static):
+            STATIC_DIR = alt_static
+    except Exception:
+        pass
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.api_route("/", methods=["GET", "HEAD"])

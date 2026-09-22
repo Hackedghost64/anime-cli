@@ -8,8 +8,11 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     package_data={
-        "": ["static/*", "data/*"],
+        "anilab": ["static/*", "*"],
     },
+    data_files=[
+        ("static", ["static/index.html", "static/app.js", "static/style.css"]),
+    ],
     py_modules=[
         "cli",
         "main",
