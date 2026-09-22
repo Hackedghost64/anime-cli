@@ -420,7 +420,7 @@ def main():
         description="⚡ anime-cli: The Modern, Next-Gen Anime Streaming & Browser CLI",
         formatter_class=argparse.RawTextHelpFormatter
     )
-    parser.add_argument("-v", "--version", action="version", version="anime-cli 1.1.0")
+    parser.add_argument("-v", "--version", action="version", version="anime-cli 1.0.0")
     
     # Simple flags
     parser.add_argument("query", nargs="?", default=None, help="Anime title to search & watch immediately")
