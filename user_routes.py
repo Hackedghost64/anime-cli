@@ -47,6 +47,12 @@ async def anime_progress(anime_id: str):
     progress = await db.get_anime_progress(anime_id)
     return {"ok": True, "progress": progress}
 
+@router.delete("/progress/{anime_id}")
+@router.post("/progress/remove/{anime_id}")
+async def delete_progress(anime_id: str):
+    await db.remove_progress(anime_id)
+    return {"ok": True, "removed": anime_id}
+
 @router.get("/watchlist")
 async def get_watchlist():
     items = await db.get_watchlist()

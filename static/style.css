@@ -398,7 +398,6 @@ main#content {
   margin-top: 3px;
 }
 
-/* Continue Watching Card */
 .cw-card {
   flex: 0 0 260px;
   scroll-snap-align: start;
@@ -408,6 +407,31 @@ main#content {
   overflow: hidden;
   transition: all 0.2s ease;
   position: relative;
+}
+.cw-remove-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 15;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(11, 13, 20, 0.75);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--border-line);
+  color: var(--text-dim);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.cw-remove-btn:hover {
+  background: var(--accent-red);
+  color: #fff;
+  border-color: var(--accent-red);
+  transform: scale(1.1);
 }
 .cw-card:hover {
   border-color: var(--accent-orange);
@@ -806,4 +830,82 @@ video#animePlayer {
 @keyframes slideIn {
   from { transform: translateX(50px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
+}
+
+/* Mobile App Bottom Bar & Responsiveness */
+.mobile-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: rgba(11, 13, 20, 0.96);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border-line);
+  z-index: 1000;
+  justify-content: space-around;
+  align-items: center;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.mobile-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.mobile-nav-item.active {
+  color: var(--accent-orange);
+}
+.mobile-nav-item .icon {
+  font-size: 19px;
+}
+
+@media (max-width: 768px) {
+  .mobile-nav {
+    display: flex;
+  }
+  body {
+    padding-bottom: 74px;
+  }
+  #navbar {
+    padding: 10px 16px;
+    flex-wrap: wrap;
+  }
+  #navbar .nav-links {
+    display: none;
+  }
+  .search-box {
+    width: 100%;
+    order: 3;
+    margin-top: 6px;
+  }
+  main#content {
+    padding: 12px;
+  }
+  .hero-banner {
+    min-height: 280px;
+    padding: 18px;
+    margin-bottom: 24px;
+  }
+  .hero-title {
+    font-size: 22px;
+  }
+  .hero-overview {
+    -webkit-line-clamp: 2;
+    font-size: 13px;
+  }
+  .anime-card {
+    flex: 0 0 135px;
+  }
+  .cw-card {
+    flex: 0 0 220px;
+  }
+  .watch-container {
+    grid-template-columns: 1fr;
+  }
 }

@@ -10,6 +10,7 @@
   
   <!-- Modern Font & Styling -->
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="manifest" href="/static/manifest.json">
   
   <!-- HLS.js Video Engine -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
@@ -40,6 +41,22 @@
       <div class="spinner"></div>
     </div>
   </main>
+
+  <!-- Mobile Bottom App Bar -->
+  <nav class="mobile-nav">
+    <a href="#/" class="mobile-nav-item active" data-nav="home">
+      <span class="icon">🏠</span>
+      <span>Home</span>
+    </a>
+    <a href="javascript:void(0)" class="mobile-nav-item" onclick="document.getElementById('globalSearch')?.focus()">
+      <span class="icon">🔍</span>
+      <span>Search</span>
+    </a>
+    <a href="#/watchlist" class="mobile-nav-item" data-nav="watchlist">
+      <span class="icon">📑</span>
+      <span>Watchlist</span>
+    </a>
+  </nav>
 
   <!-- Toast Notification Hub -->
   <div id="toast-container"></div>

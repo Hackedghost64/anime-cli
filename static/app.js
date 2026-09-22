@@ -16,6 +16,7 @@ const API = {
   // User & DB
   getProgress: (animeId) => fetch(`/api/user/progress/${animeId}`).then(r => r.json()),
   getContinueWatching: () => fetch('/api/user/progress/continue').then(r => r.json()),
+  removeProgress: (animeId) => fetch(`/api/user/progress/${animeId}`, { method: 'DELETE' }).then(r => r.json()),
   saveProgress: (data) => fetch('/api/user/progress', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -46,6 +47,28 @@ function toast(msg, ms = 3000) {
   c.appendChild(t);
   setTimeout(() => t.remove(), ms);
 }
+
+window.removeCW = async function(animeId) {
+  try {
+    await API.removeProgress(animeId);
+    toast("Removed from Continue Watching");
+    const el = document.querySelector(`.cw-card[data-id="${animeId}"]`);
+    if (el) {
+      el.style.transition = 'all 0.25s ease';
+      el.style.opacity = '0';
+      el.style.transform = 'scale(0.8)';
+      setTimeout(() => {
+        el.remove();
+        const carousel = document.querySelector('.cw-carousel');
+        if (carousel && !carousel.children.length) {
+          carousel.closest('.section')?.remove();
+        }
+      }, 250);
+    }
+  } catch(e) {
+    toast("Failed to remove progress");
+  }
+};
 
 function esc(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({
@@ -125,25 +148,28 @@ async function viewHome() {
           <div class="section-header">
             <h2 class="section-title">Continue Watching</h2>
           </div>
-          <div class="carousel">
+          <div class="carousel cw-carousel">
             ${continueItems.map(item => {
               const pct = item.duration ? Math.min(100, Math.round((item.position / item.duration) * 100)) : 0;
               return `
-                <a class="cw-card" href="#/watch/${item.anime_id}?ep=${item.ep_id}">
-                  <div class="cw-poster">
-                    <img src="${item.anime_poster || ''}" alt="" onerror="this.src='/static/placeholder.png'">
-                    <div class="cw-play-overlay">
-                      <div class="cw-play-icon">▶</div>
+                <div class="cw-card" data-id="${item.anime_id}">
+                  <button class="cw-remove-btn" title="Remove from Continue Watching" onclick="removeCW('${item.anime_id}')">✕</button>
+                  <a href="#/watch/${item.anime_id}?ep=${item.ep_id}">
+                    <div class="cw-poster">
+                      <img src="${item.anime_poster || ''}" alt="" onerror="this.src='/static/placeholder.png'">
+                      <div class="cw-play-overlay">
+                        <div class="cw-play-icon">▶</div>
+                      </div>
+                      <div class="cw-progress-bar">
+                        <div class="cw-progress-fill" style="width: ${pct}%"></div>
+                      </div>
                     </div>
-                    <div class="cw-progress-bar">
-                      <div class="cw-progress-fill" style="width: ${pct}%"></div>
+                    <div class="cw-info">
+                      <div class="cw-title">${esc(item.anime_title || 'Anime')}</div>
+                      <div class="cw-sub">Ep ${item.ep_num || '?'} · ${Math.round(item.position / 60)}m / ${Math.round(item.duration / 60)}m (${pct}%)</div>
                     </div>
-                  </div>
-                  <div class="cw-info">
-                    <div class="cw-title">${esc(item.anime_title || 'Anime')}</div>
-                    <div class="cw-sub">Ep ${item.ep_num || '?'} · ${Math.round(item.position / 60)}m / ${Math.round(item.duration / 60)}m (${pct}%)</div>
-                  </div>
-                </a>
+                  </a>
+                </div>
               `;
             }).join('')}
           </div>

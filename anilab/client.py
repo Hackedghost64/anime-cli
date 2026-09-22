@@ -56,6 +56,19 @@ class AnilabClient:
             return hit
         data = await self._get("search", params={"query": query, "page": page})
         posts = data.get("posts", []) if isinstance(data, dict) else []
+        
+        # Hydrate titles and metadata in parallel for search results
+        if posts:
+            ids_to_fetch = [p["id"] for p in posts[:15] if isinstance(p, dict) and "id" in p]
+            detailed_list = await asyncio.gather(*[self.post(i) for i in ids_to_fetch], return_exceptions=True)
+            hydrated_posts = []
+            for idx, p in enumerate(posts):
+                if idx < len(detailed_list) and isinstance(detailed_list[idx], dict) and detailed_list[idx].get("title"):
+                    hydrated_posts.append(detailed_list[idx])
+                else:
+                    hydrated_posts.append(p)
+            posts = hydrated_posts
+
         catalog_cache().set(key, posts, ttl=3600)
         return posts
 

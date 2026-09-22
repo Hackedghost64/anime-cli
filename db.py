@@ -107,6 +107,13 @@ async def get_continue_watching(limit: int = 20) -> List[Dict[str, Any]]:
             rows = await cursor.fetchall()
             return [dict(r) for r in rows]
 
+async def remove_progress(anime_id: str) -> bool:
+    """Deletes watch progress for a given anime_id."""
+    async with get_db() as db:
+        await db.execute("DELETE FROM watch_progress WHERE anime_id=?", (str(anime_id),))
+        await db.commit()
+        return True
+
 async def toggle_watchlist(
     anime_id: str,
     anime_title: str = "",
