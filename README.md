@@ -140,13 +140,16 @@ Choose an action >
 * **Linux Sleep Inhibitor:** Automatically locks Linux system sleep (`systemd-inhibit` and `gnome-session-inhibit`), preventing laptops/desktops from going to sleep while streaming to your phone.
 * **PWA Support:** Install to Home Screen on iOS Safari or Android Chrome for a native app feel with bottom navigation.
 
-### 6. 🍿 Modern Obsidian Web Player
-* **Cinematic Floating Overlay:** Auto-hiding modern player controls with obsidian/orange aesthetic.
-* **Precision Scrubber:** Smooth seeking with real-time buffer progress and hover time tooltip.
-* **⚡ Auto-Skip OP/ED:** Toggle automated intro/outro skipping on the player overlay.
-* **Playback Speed & HLS Levels:** Choose speeds from `0.75x` to `2.0x` and switch between HLS quality streams (1080p, 720p, Auto).
-* **PiP & Theater Mode:** Full support for Picture-in-Picture and Theater view (`T`).
-* **Mobile Gestures:** Double-tap left or right half to seek $\pm 10$s with animated visual ripples.
+### 6. 🍿 Modern Vidstack Obsidian Web Player
+* **Engineered with Vidstack:** Next-generation, zero-clutter HTML5 / HLS media player engine optimized across desktop, tablet, and mobile portrait/landscape.
+* **Glassmorphic Center Play/Pause:** Responsive circular center button displaying state (`▶` / `❚❚`) with smooth fade transitions on control auto-hide.
+* **In-Player Next Episode Button:** Top-right floating badge inside the video container (accessible even in full screen) plus bottom toolbar integration next to play/pause.
+* **Audio & Preference Persistence:** Remembers your SUB or DUB selection across entire anime series via `localStorage`, and persists volume, mute state, and playback speeds (`0.75x` - `2.0x`).
+* **Resilient Server Switching & Fallback:** Switching servers preserves your exact playback second without resetting to zero. If an upstream stream drops, a 1-click fallback button offers immediate backup server failover.
+* **Session Persistence & Exit-Hooks:** Syncs playback timestamps every 10 seconds via background heartbeat and fires an exit hook on route change or browser close to guarantee cross-device resume.
+* **⚡ AniSkip Auto-Skip:** Automatically detects anime openings and endings via AniList. Clicking "Skip Outro" provides zero-lag autoplay into the next episode.
+* **Mobile Gestures:** Double-tap left/right edges to seek $\pm 10$s with ripple animations. Accidental double-taps in the middle are safely guarded against unwanted full-screen or minimize toggles.
+* **PiP & Theater Mode:** Full Picture-in-Picture (`P`), Theater Mode (`T`), and dedicated Help modal (`?` / `H`).
 
 ---
 
@@ -195,11 +198,11 @@ Choose an action >
 | `F` | Toggle Fullscreen |
 | `T` | Toggle Theater Mode |
 | `P` | Toggle Picture-in-Picture (PiP) |
-| `M` | Toggle Mute |
-| `N` | Jump to Next Episode |
-| `?` | Open Help & Shortcuts Modal |
-| `Double-Tap` (Mobile) | Seek $\pm 10$s with animated touch ripple |
-| `⚡ Auto-Skip` | Automatically skip Openings & Endings |
+| `M` | Toggle Mute / Unmute |
+| `N` | Autoplay Next Episode |
+| `?` / `H` | Open Help & Shortcuts Modal |
+| `Double-Tap Left / Right` (Mobile) | Seek $\pm 10$s with animated touch ripple |
+| `⚡ Auto-Skip` | Skip Opening (OP) / Instant jump on Ending (ED) |
 
 ---
 
