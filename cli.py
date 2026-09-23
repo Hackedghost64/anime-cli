@@ -98,6 +98,62 @@ def fzf_select(options: List[str], prompt: str = "Select > ", preview_cmd: Optio
         pass
     return None
 
+def parse_range_selection(raw: str, max_count: int) -> List[int]:
+    """Parses range strings like '1-12', '1,3,5', or 'all' into 0-indexed list of integers."""
+    raw = raw.strip().lower()
+    if raw in ("all", "*"):
+        return list(range(max_count))
+    indices = set()
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    for p in parts:
+        if "-" in p:
+            sub = p.split("-")
+            if len(sub) == 2 and sub[0].isdigit() and sub[1].isdigit():
+                start = max(1, int(sub[0]))
+                end = min(max_count, int(sub[1]))
+                for n in range(start, end + 1):
+                    indices.add(n - 1)
+        elif p.isdigit():
+            val = int(p)
+            if 1 <= val <= max_count:
+                indices.add(val - 1)
+    return sorted(list(indices))
+
+def fzf_multi_select(options: List[str], prompt: str = "Select (TAB to pick multiple, Enter to confirm) > ") -> List[int]:
+    """Interactively select multiple options using fzf -m, or fallback to range/number input."""
+    if shutil.which("fzf"):
+        cmd = [
+            "fzf", "-m", "--ansi", f"--prompt={prompt}", 
+            "--reverse", "--height=50%", "--cycle",
+            "--header=TAB: select/deselect | Shift-TAB: toggle all | Enter: confirm selection"
+        ]
+        try:
+            p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+            out, _ = p.communicate(input="\n".join(options))
+            if p.returncode == 0 and out.strip():
+                selected_lines = [line.strip() for line in out.strip().split("\n") if line.strip()]
+                indices = []
+                for s in selected_lines:
+                    if s in options:
+                        indices.append(options.index(s))
+                return sorted(list(set(indices)))
+            return []
+        except Exception:
+            pass
+
+    # Fallback to range / list input (e.g. 1-12, 1,3,5, all)
+    print(f"\n{C_BOLD}{prompt}{C_RESET}")
+    print(f"{C_DIM}Tip: Enter numbers or ranges like '1-12', '1,3,5', or 'all'{C_RESET}\n")
+    for i, opt in enumerate(options, 1):
+        print(f"  {C_CYAN}[{i:2d}]{C_RESET} {opt}")
+    try:
+        raw = input(f"\n{C_ORANGE}Enter episode(s) to download: {C_RESET}").strip()
+        if not raw:
+            return []
+        return parse_range_selection(raw, len(options))
+    except (KeyboardInterrupt, EOFError):
+        return []
+
 class SleepInhibitor:
     """Inhibits system sleep, idle timeout, and lid-close suspend while server is active."""
     def __init__(self, reason: str = "Streaming anime to mobile device"):
@@ -446,6 +502,92 @@ async def cmd_terminal(
                     tag = f" [{int(pos//60):02d}:{int(pos%60):02d}]"
             ep_options.append(f"#{num} - {name}{tag}")
 
+        # Download mode: multi-select or range download
+        if download:
+            if ep_num is not None:
+                match_idx = None
+                for idx, e in enumerate(episodes):
+                    if str(e.get("num")) == str(ep_num):
+                        match_idx = idx
+                        break
+                download_indices = [match_idx if match_idx is not None else 0]
+            else:
+                download_indices = fzf_multi_select(
+                    ep_options, 
+                    prompt=f"Select Episode(s) to download (TAB to select multiple, Enter to confirm) > "
+                )
+                if not download_indices:
+                    print("No episodes selected for download.")
+                    return
+
+            # Ask audio preference ONCE for the whole batch if needed
+            active_dub_pref = dub_pref
+            if active_dub_pref is None:
+                first_ep = episodes[download_indices[0]]
+                probe_servers = await kyoto.get_servers(anime_id, str(first_ep.get("id")))
+                has_sub = any(s.get("lang") == "sub" for s in probe_servers)
+                has_dub = any(s.get("lang") == "dub" for s in probe_servers)
+                if has_sub and has_dub:
+                    audio_opts = [
+                        "🇯🇵 SUB - Japanese Audio with Subtitles",
+                        "🇺🇸 DUB - English Audio"
+                    ]
+                    choice = fzf_select(audio_opts, prompt="Choose Audio for Download(s) > ")
+                    active_dub_pref = (choice == 1)
+                elif has_dub:
+                    active_dub_pref = True
+                else:
+                    active_dub_pref = False
+
+            successful_downloads = []
+            for item_idx, ep_idx in enumerate(download_indices, 1):
+                cur_ep = episodes[ep_idx]
+                c_ep_id = str(cur_ep.get("id"))
+                c_ep_num = str(cur_ep.get("num", ep_idx + 1))
+                c_ep_name = cur_ep.get("name") or f"Episode {c_ep_num}"
+                
+                print(f"\n{C_BOLD}{C_GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{C_RESET}")
+                print(f"{C_BOLD}📥 [{item_idx}/{len(download_indices)}] Downloading: #{c_ep_num} - {c_ep_name}{C_RESET}")
+                print(f"{C_BOLD}{C_GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{C_RESET}")
+
+                servers = await kyoto.get_servers(anime_id, c_ep_id)
+                if not servers:
+                    print(f"{C_RED}No servers found for Episode {c_ep_num}. Skipping.{C_RESET}")
+                    continue
+
+                subs = [s for s in servers if s.get("lang") == "sub"]
+                dubs = [s for s in servers if s.get("lang") == "dub"]
+                
+                if active_dub_pref and dubs:
+                    sel_srv = dubs[0]
+                elif not active_dub_pref and subs:
+                    sel_srv = subs[0]
+                else:
+                    sel_srv = servers[0]
+
+                stream_res = await kyoto.resolve_stream(anime_id, sel_srv.get("id"))
+                stream_url = stream_res.get("url")
+                if not stream_url:
+                    print(f"{C_RED}Failed to resolve stream for Episode {c_ep_num}. Skipping.{C_RESET}")
+                    continue
+
+                safe_title = "".join(c for c in anime_title if c.isalnum() or c in " -_").strip()
+                filename = f"{safe_title} - Ep {c_ep_num}.mp4"
+                print(f"{C_ORANGE}Saving 1080p MP4 to '{filename}' via FFmpeg...{C_RESET}")
+                ffmpeg_cmd = [
+                    "ffmpeg", "-y", "-headers", "Referer: https://play.app/\r\n",
+                    "-i", stream_url, "-c", "copy", "-bsf:a", "aac_adtstoasc", filename
+                ]
+                ret = subprocess.run(ffmpeg_cmd)
+                if ret.returncode == 0:
+                    print(f"{C_GREEN}✓ Successfully downloaded: {filename}{C_RESET}")
+                    successful_downloads.append(filename)
+                else:
+                    print(f"{C_RED}FFmpeg download failed for Episode {c_ep_num}.{C_RESET}")
+
+            print(f"\n{C_BOLD}{C_GREEN}🎉 Batch download finished! ({len(successful_downloads)}/{len(download_indices)} episodes downloaded successfully){C_RESET}\n")
+            return
+
         if ep_num is not None:
             match_idx = None
             for idx, e in enumerate(episodes):
@@ -543,19 +685,6 @@ async def cmd_terminal(
         stream_url = stream_res.get("url")
         if not stream_url:
             print(f"{C_RED}Failed to resolve video stream.{C_RESET}")
-            return
-
-        # Download mode
-        if download:
-            safe_title = "".join(c for c in anime_title if c.isalnum() or c in " -_").strip()
-            filename = f"{safe_title} - Ep {ep_num}.mp4"
-            print(f"\n{C_ORANGE}Downloading to '{filename}' via FFmpeg...{C_RESET}")
-            ffmpeg_cmd = [
-                "ffmpeg", "-y", "-headers", "Referer: https://play.app/\r\n",
-                "-i", stream_url, "-c", "copy", "-bsf:a", "aac_adtstoasc", filename
-            ]
-            subprocess.run(ffmpeg_cmd)
-            print(f"{C_GREEN}✓ Download complete: {filename}{C_RESET}")
             return
 
         # AniSkip Integration: Auto-Skip Openings in MPV
