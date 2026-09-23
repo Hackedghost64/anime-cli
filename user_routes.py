@@ -5,17 +5,11 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import db
 
-router = APIRouter(prefix="/user", tags=["user"])
+from fastapi import APIRouter, HTTPException, Request
+import json
+import db
 
-class ProgressPayload(BaseModel):
-    anime_id: str
-    ep_id: str
-    position: float
-    duration: float
-    anime_title: Optional[str] = ""
-    anime_poster: Optional[str] = ""
-    ep_num: Optional[str] = ""
-    ep_name: Optional[str] = ""
+router = APIRouter(prefix="/user", tags=["user"])
 
 class WatchlistPayload(BaseModel):
     anime_id: str
@@ -24,16 +18,37 @@ class WatchlistPayload(BaseModel):
     anime_type: Optional[str] = ""
 
 @router.post("/progress")
-async def record_progress(payload: ProgressPayload):
+async def record_progress(request: Request):
+    try:
+        data = await request.json()
+    except Exception:
+        body = await request.body()
+        try:
+            data = json.loads(body.decode("utf-8"))
+        except Exception:
+            return {"ok": False, "error": "Invalid payload"}
+
+    anime_id = str(data.get("anime_id", ""))
+    ep_id = str(data.get("ep_id", ""))
+    if not anime_id or not ep_id:
+        return {"ok": False, "error": "Missing anime_id or ep_id"}
+
+    try:
+        position = float(data.get("position", 0))
+        duration = float(data.get("duration", 0))
+    except (ValueError, TypeError):
+        position = 0.0
+        duration = 0.0
+
     await db.save_progress(
-        anime_id=payload.anime_id,
-        ep_id=payload.ep_id,
-        position=payload.position,
-        duration=payload.duration,
-        anime_title=payload.anime_title or "",
-        anime_poster=payload.anime_poster or "",
-        ep_num=payload.ep_num or "",
-        ep_name=payload.ep_name or ""
+        anime_id=anime_id,
+        ep_id=ep_id,
+        position=position,
+        duration=duration,
+        anime_title=data.get("anime_title") or "",
+        anime_poster=data.get("anime_poster") or "",
+        ep_num=str(data.get("ep_num") or ""),
+        ep_name=data.get("ep_name") or ""
     )
     return {"ok": True}
 

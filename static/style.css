@@ -978,7 +978,67 @@ video#animePlayer {
 .player-overlay.visible,
 .player-overlay.paused {
   opacity: 1;
+}
+
+.player-overlay.visible .overlay-top,
+.player-overlay.visible .overlay-bottom,
+.player-overlay.visible #centerPlayIcon,
+.player-overlay.paused .overlay-top,
+.player-overlay.paused .overlay-bottom,
+.player-overlay.paused #centerPlayIcon,
+.video-wrapper:hover .overlay-top,
+.video-wrapper:hover .overlay-bottom,
+.video-wrapper:hover #centerPlayIcon {
   pointer-events: auto;
+}
+
+/* Tactile Central Play/Pause Pulse */
+.play-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.6);
+  width: 72px;
+  height: 72px;
+  background: rgba(19, 22, 34, 0.85);
+  border: 1px solid var(--border-line);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  color: #fff;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 15;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.8);
+}
+.play-pulse.animate {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+/* Stream Re-Buffering / Network Stabilization Badge */
+.rebuffering-badge {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(19, 22, 34, 0.9);
+  border: 1px solid rgba(255, 100, 10, 0.4);
+  color: var(--accent-orange);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 14px;
+  border-radius: var(--radius-full);
+  display: none;
+  align-items: center;
+  gap: 8px;
+  z-index: 25;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.7);
+  animation: fadeIn 0.2s ease;
 }
 
 .overlay-top {
@@ -986,6 +1046,7 @@ video#animePlayer {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  pointer-events: none;
 }
 .player-title-info {
   font-size: 15px;
@@ -1074,6 +1135,10 @@ video#animePlayer {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  pointer-events: none;
+}
+.scrubber-container, .controls-row {
+  pointer-events: auto;
 }
 .controls-row {
   display: flex;
