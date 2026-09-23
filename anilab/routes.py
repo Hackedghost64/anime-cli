@@ -111,3 +111,26 @@ async def anime_config():
         return {"ok": True, "data": data}
     except Exception as e:
         raise HTTPException(502, f"anilab config failed: {e}")
+
+@router.get("/binge/recommendations")
+async def binge_recommendations(
+    vibe: str = Query("hype"),
+    length: str = Query("any"),
+    hidden_gems: bool = Query(True)
+):
+    try:
+        from anilab.binge import fetch_binge_pool
+        pool = await fetch_binge_pool(vibe, length_mode=length, hidden_gems=hidden_gems)
+        return {"ok": True, "recommendations": pool, "count": len(pool)}
+    except Exception as e:
+        raise HTTPException(502, f"Binge fetch failed: {e}")
+
+@router.get("/schedule/today")
+async def schedule_today():
+    try:
+        from anilab.schedule import fetch_today_airing_schedule
+        schedule = await fetch_today_airing_schedule()
+        return {"ok": True, "schedule": schedule, "count": len(schedule)}
+    except Exception as e:
+        raise HTTPException(502, f"Schedule fetch failed: {e}")
+

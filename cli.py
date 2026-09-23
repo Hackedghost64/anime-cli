@@ -837,55 +837,140 @@ async def cmd_terminal(
             break
 
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Help & Shortcuts Guide
+# -----------------------------------------------------------------------------
+def show_help():
+    banner()
+    w = 78
+    sep = "─" * (w - 2)
+    print(f"{C_ORANGE}╭{sep}╮{C_RESET}")
+    print(f"{C_ORANGE}│{C_BOLD}{'  ⚡ ANIME-CLI COMMANDS & SHORTCUTS GUIDE':<{w-2}}{C_RESET}{C_ORANGE}│{C_RESET}")
+    print(f"{C_ORANGE}├{sep}┤{C_RESET}")
+    
+    def row(col1, col2):
+        print(f"{C_ORANGE}│{C_RESET} {C_GOLD}{col1:<32}{C_RESET} {C_RESET}{col2:<41}{C_RESET} {C_ORANGE}│{C_RESET}")
+
+    def header(title):
+        print(f"{C_ORANGE}├{sep}┤{C_RESET}")
+        print(f"{C_ORANGE}│{C_CYAN}{C_BOLD}  {title:<{w-4}}{C_RESET}{C_ORANGE}│{C_RESET}")
+        print(f"{C_ORANGE}├{sep}┤{C_RESET}")
+
+    header("COMMAND-LINE SYNTAX & USAGE")
+    row("anime-cli", "Open interactive navigation dashboard")
+    row("anime-cli <title>", "Search & stream immediately in MPV")
+    row("anime-cli -b, --browser", "Launch modern Crunchyroll web interface")
+    row("anime-cli -s, --share", "Start public HTTPS tunnel with mobile QR")
+    row("anime-cli -c, --continue", "Resume last watched episode")
+    row("anime-cli -B, --binge", "Launch Binge Roulette mood selector")
+    row("anime-cli --today, --schedule", "View today's live anime release radar")
+    row("anime-cli -o, --download [title]", "Batch download 1080p MP4 via FFmpeg")
+    row("anime-cli -d, --dub", "Prefer English Dub audio servers")
+    row("anime-cli --sub", "Prefer Japanese Sub audio servers")
+    row("anime-cli help, -h", "Display this interactive help manual")
+
+    header("MPV PLAYER KEYBOARD SHORTCUTS")
+    row("Space  or  p", "Play / Pause playback")
+    row("→  /  ←", "Seek forward / backward 5 seconds")
+    row("Shift+→  /  Shift+←", "Seek forward / backward 60 seconds")
+    row("↑  /  ↓", "Seek forward / backward 60 seconds")
+    row("9  /  0", "Decrease / Increase volume")
+    row("m", "Toggle audio mute")
+    row("f", "Toggle fullscreen")
+    row("j", "Cycle available audio tracks (Sub/Dub)")
+    row("v", "Toggle subtitle track visibility")
+    row("q", "Quit player & save resume progress")
+    row(">  /  <", "Next / Previous playlist episode")
+
+    header("MODERN WEB PLAYER KEYBOARD SHORTCUTS")
+    row("Space  or  K", "Play / Pause playback")
+    row("→  or  L", "Seek forward 10 seconds")
+    row("←  or  J", "Seek backward 10 seconds")
+    row("↑  /  ↓", "Adjust volume by 10%")
+    row("F", "Toggle Fullscreen")
+    row("T", "Toggle Theater Mode")
+    row("P", "Toggle Picture-in-Picture (PiP)")
+    row("M", "Toggle Mute")
+    row("N", "Jump to Next Episode")
+    row("?", "Toggle Help & Shortcuts Modal")
+    row("Double-Tap (Mobile)", "Seek ±10s with visual ripple effect")
+    row("⚡ Auto-Skip (Toggle)", "Automatically bypass Openings & Endings")
+
+    print(f"{C_ORANGE}╰{sep}╯{C_RESET}")
+    print()
+
+# -----------------------------------------------------------------------------
 # Main Interactive Menu
 # -----------------------------------------------------------------------------
 async def interactive_menu():
-    banner()
-    menu_options = [
-        "🔍 Search & Watch Anime",
-        "🎲 Binge Roulette (Quick 3-Question Match)",
-        "📅 Today's Airing Radar (Live Release Schedule)",
-        "▶ Continue Watching (Resume last episode)",
-        "📥 Download Episode (1080p MP4 via FFmpeg)",
-        "🌐 Launch Web Browser",
-        "🔗 Share Public Tunnel (QR Code for phone)",
-        "❌ Exit"
-    ]
-    sel = fzf_select(menu_options, prompt="Choose an action > ")
-    if sel == 0:
-        await cmd_terminal()
-    elif sel == 1:
-        from anilab.binge import run_binge_match
-        title = await run_binge_match()
-        if title:
-            await cmd_terminal(query=title, ep_num=1)
-    elif sel == 2:
-        from anilab.schedule import run_schedule_radar
-        res = await run_schedule_radar()
-        if res:
-            title, ep = res
-            await cmd_terminal(query=title, ep_num=ep)
-    elif sel == 3:
-        await cmd_terminal(continue_last=True)
-    elif sel == 4:
-        await cmd_terminal(download=True)
-    elif sel == 5:
-        cmd_browser()
-    elif sel == 6:
-        cmd_browser(share=True)
-    else:
-        print("Goodbye!")
+    while True:
+        banner()
+        menu_options = [
+            "🔍 Search & Watch Anime",
+            "🎲 Binge Roulette (Quick 3-Question Match)",
+            "📅 Today's Airing Radar (Live Release Schedule)",
+            "▶ Continue Watching (Resume last episode)",
+            "📥 Download Episode (1080p MP4 via FFmpeg)",
+            "🌐 Launch Web Browser",
+            "🔗 Share Public Tunnel (QR Code for phone)",
+            "❓ Help & Shortcuts Guide",
+            "❌ Exit"
+        ]
+        sel = fzf_select(menu_options, prompt="Choose an action > ")
+        if sel == 0:
+            await cmd_terminal()
+            break
+        elif sel == 1:
+            from anilab.binge import run_binge_match
+            title = await run_binge_match()
+            if title:
+                await cmd_terminal(query=title, ep_num=1)
+            break
+        elif sel == 2:
+            from anilab.schedule import run_schedule_radar
+            res = await run_schedule_radar()
+            if res:
+                title, ep = res
+                await cmd_terminal(query=title, ep_num=ep)
+            break
+        elif sel == 3:
+            await cmd_terminal(continue_last=True)
+            break
+        elif sel == 4:
+            await cmd_terminal(download=True)
+            break
+        elif sel == 5:
+            cmd_browser()
+            break
+        elif sel == 6:
+            cmd_browser(share=True)
+            break
+        elif sel == 7:
+            show_help()
+            try:
+                input(f"\n{C_ORANGE}Press Enter to return to menu...{C_RESET}")
+            except (KeyboardInterrupt, EOFError):
+                break
+        else:
+            print("Goodbye!")
+            break
 
 # -----------------------------------------------------------------------------
 # Main CLI Dispatcher
 # -----------------------------------------------------------------------------
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] in ("help", "--help", "-h"):
+        show_help()
+        sys.exit(0)
+
     import argparse
     parser = argparse.ArgumentParser(
         prog="anime-cli",
         description="⚡ anime-cli: The Modern, Next-Gen Anime Streaming & Browser CLI",
-        formatter_class=argparse.RawTextHelpFormatter
+        formatter_class=argparse.RawTextHelpFormatter,
+        add_help=False
     )
+    parser.add_argument("-h", "--help", action="store_true", help="Show help and shortcuts guide")
     parser.add_argument("-v", "--version", action="version", version="anime-cli 1.0.0")
     
     # Simple flags

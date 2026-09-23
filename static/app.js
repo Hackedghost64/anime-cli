@@ -31,7 +31,11 @@ const API = {
   checkWatchlist: (animeId) => fetch(`/api/user/watchlist/check/${animeId}`).then(r => r.json()),
   
   // AniSkip
-  getSkipTimes: (title, ep, dur) => fetch(`/api/skip/times?title=${encodeURIComponent(title)}&episode=${ep}&duration=${dur}`).then(r => r.json())
+  getSkipTimes: (title, ep, dur) => fetch(`/api/skip/times?title=${encodeURIComponent(title)}&episode=${ep}&duration=${dur}`).then(r => r.json()),
+
+  // Binge & Airing Today
+  binge: (vibe='hype', length='any', gems=true) => fetch(`/api/anime/binge/recommendations?vibe=${encodeURIComponent(vibe)}&length=${encodeURIComponent(length)}&hidden_gems=${gems}`).then(r => r.json()),
+  today: () => fetch('/api/anime/schedule/today').then(r => r.json())
 };
 
 // State
@@ -40,6 +44,38 @@ let progressInterval = null;
 let activeSkipIntervals = [];
 let currentPost = null;
 let currentEp = null;
+
+function toggleHelpModal() {
+  const m = document.getElementById('helpModal');
+  if (!m) return;
+  m.style.display = (m.style.display === 'none' || !m.style.display) ? 'flex' : 'none';
+}
+
+function toggleTheaterMode() {
+  const c = document.querySelector('.watch-container');
+  if (c) c.classList.toggle('theater-mode');
+}
+
+function showTapRipple(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('animate');
+  void el.offsetWidth;
+  el.classList.add('animate');
+  setTimeout(() => el.classList.remove('animate'), 350);
+}
+
+function togglePlay() {
+  const v = document.getElementById('animePlayer');
+  if (v) v.paused ? v.play() : v.pause();
+}
+
+function seekBy(sec) {
+  const v = document.getElementById('animePlayer');
+  if (v && v.duration) {
+    v.currentTime = Math.max(0, Math.min(v.duration, v.currentTime + sec));
+  }
+}
 
 function toast(msg, ms = 3000) {
   const c = document.getElementById('toast-container');
@@ -84,8 +120,19 @@ function render(html) {
   window.scrollTo(0, 0);
 }
 
+function formatTime(sec) {
+  if (isNaN(sec) || sec < 0) return "00:00";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 function setActiveNav(navName) {
-  document.querySelectorAll('.nav-link').forEach(el => {
+  document.querySelectorAll('.nav-link, .mobile-nav-item').forEach(el => {
     el.classList.toggle('active', el.dataset.nav === navName);
   });
 }
@@ -442,10 +489,72 @@ async function viewWatch(pid, epIdPref, srvPref) {
       <div class="watch-container">
         <div class="player-stage">
           <div class="video-wrapper" id="videoWrapper">
-            <video id="animePlayer" controls playsinline preload="auto"></video>
+            <video id="animePlayer" playsinline preload="auto"></video>
+
+            <!-- Double-Tap Mobile Ripples -->
+            <div id="tapLeft" class="tap-ripple left"><span>⏪ 10s</span></div>
+            <div id="tapRight" class="tap-ripple right"><span>10s ⏩</span></div>
+
+            <!-- Modern Floating Controls Overlay -->
+            <div id="playerOverlay" class="player-overlay">
+              <div class="overlay-top">
+                <div class="player-title-info">
+                  ${esc(post.title)} · Ep ${curEp.num || '?'} ${curEp.name ? '— ' + esc(curEp.name) : ''}
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <label class="auto-skip-toggle" title="Auto-skip Openings & Endings">
+                    <input type="checkbox" id="autoSkipToggle" checked>
+                    <span>⚡ Auto-Skip</span>
+                  </label>
+                  <button class="ctrl-btn" onclick="toggleTheaterMode()" title="Theater Mode (T)">🗔</button>
+                  <button class="ctrl-btn" onclick="toggleHelpModal()" title="Shortcuts (?)">❓</button>
+                </div>
+              </div>
+
+              <div id="centerPlayIcon" style="align-self:center;font-size:44px;color:#fff;text-shadow:0 4px 16px rgba(0,0,0,0.8);cursor:pointer;opacity:0.9;" onclick="togglePlay()">
+                ▶
+              </div>
+
+              <div class="overlay-bottom">
+                <div id="scrubber" class="scrubber-container">
+                  <div class="scrubber-track">
+                    <div id="scrubberBuffer" class="scrubber-buffer"></div>
+                    <div id="scrubberFill" class="scrubber-fill">
+                      <div class="scrubber-thumb"></div>
+                    </div>
+                  </div>
+                  <div id="timeTooltip" class="time-tooltip">00:00</div>
+                </div>
+
+                <div class="controls-row">
+                  <div class="controls-left">
+                    <button id="ctrlPlayBtn" class="ctrl-btn" onclick="togglePlay()" title="Play/Pause (Space)">▶</button>
+                    <button class="ctrl-btn" onclick="seekBy(-10)" title="Rewind 10s (← / J)">↺10</button>
+                    <button class="ctrl-btn" onclick="seekBy(10)" title="Forward 10s (→ / L)">↻10</button>
+                    <span id="timeDisplay" class="time-display">00:00 / 00:00</span>
+                  </div>
+
+                  <div class="controls-right">
+                    <select id="speedSelect" class="ctrl-select" title="Playback Speed">
+                      <option value="0.75">0.75x</option>
+                      <option value="1" selected>1.0x</option>
+                      <option value="1.25">1.25x</option>
+                      <option value="1.5">1.5x</option>
+                      <option value="2">2.0x</option>
+                    </select>
+                    <select id="qualitySelect" class="ctrl-select" title="Video Quality">
+                      <option value="-1">Auto</option>
+                    </select>
+                    <button id="pipBtn" class="ctrl-btn" title="Picture in Picture (P)">⧉</button>
+                    <button id="fullscreenBtn" class="ctrl-btn" title="Fullscreen (F)">⛶</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div id="playerLoader" class="player-loader">
               <div class="spinner"></div>
-              <div id="loaderText" style="font-size:14px;color:var(--text-dim);">Resolving HLS stream...</div>
+              <div id="loaderText" style="font-size:14px;color:var(--text-dim);">Resolving 1080p HLS stream...</div>
             </div>
             <button id="skipBtn" class="skip-button">
               ⚡ Skip Intro
@@ -592,7 +701,10 @@ async function viewWatch(pid, epIdPref, srvPref) {
   }
 }
 
-// Player initializer using HLS.js
+// Modern Video Player initializer using HLS.js
+let playerOverlayTimer = null;
+let scrubberDragActive = false;
+
 function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
   const video = document.getElementById('animePlayer');
   if (!video) return;
@@ -600,6 +712,175 @@ function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
   cleanUpPlayer();
   currentPost = post;
   currentEp = episode;
+
+  const wrapper = document.getElementById('videoWrapper');
+  const overlay = document.getElementById('playerOverlay');
+  const centerPlay = document.getElementById('centerPlayIcon');
+  const ctrlPlay = document.getElementById('ctrlPlayBtn');
+  const scrubber = document.getElementById('scrubber');
+  const scrubberFill = document.getElementById('scrubberFill');
+  const scrubberBuffer = document.getElementById('scrubberBuffer');
+  const timeTooltip = document.getElementById('timeTooltip');
+  const timeDisplay = document.getElementById('timeDisplay');
+  const speedSelect = document.getElementById('speedSelect');
+  const qualitySelect = document.getElementById('qualitySelect');
+  const pipBtn = document.getElementById('pipBtn');
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+  const autoSkipToggle = document.getElementById('autoSkipToggle');
+  const skipBtn = document.getElementById('skipBtn');
+
+  // Auto-skip setting persisted in localStorage
+  if (autoSkipToggle) {
+    const savedAutoSkip = localStorage.getItem('anime_auto_skip');
+    autoSkipToggle.checked = savedAutoSkip !== null ? savedAutoSkip === 'true' : true;
+    autoSkipToggle.onchange = () => {
+      localStorage.setItem('anime_auto_skip', String(autoSkipToggle.checked));
+      toast(autoSkipToggle.checked ? "⚡ Auto-Skip Enabled" : "Manual Skip Enabled", 2000);
+    };
+  }
+
+  // Play / Pause event handlers
+  video.onplay = () => {
+    if (ctrlPlay) ctrlPlay.textContent = '⏸';
+    if (centerPlay) centerPlay.style.display = 'none';
+    if (overlay) overlay.classList.remove('paused');
+    resetOverlayTimer();
+  };
+
+  video.onpause = () => {
+    if (ctrlPlay) ctrlPlay.textContent = '▶';
+    if (centerPlay) {
+      centerPlay.textContent = '▶';
+      centerPlay.style.display = 'block';
+    }
+    if (overlay) overlay.classList.add('paused');
+  };
+
+  // Speed selection
+  if (speedSelect) {
+    speedSelect.onchange = (e) => {
+      video.playbackRate = parseFloat(e.target.value);
+    };
+  }
+
+  // Picture in Picture
+  if (pipBtn) {
+    pipBtn.onclick = async () => {
+      try {
+        if (document.pictureInPictureElement) {
+          await document.exitPictureInPicture();
+        } else if (video.requestPictureInPicture) {
+          await video.requestPictureInPicture();
+        }
+      } catch (err) {
+        toast("PiP error: " + err.message);
+      }
+    };
+  }
+
+  // Fullscreen
+  if (fullscreenBtn) {
+    fullscreenBtn.onclick = () => {
+      if (!document.fullscreenElement) {
+        wrapper?.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    };
+  }
+
+  // Auto-hide controls overlay
+  function resetOverlayTimer() {
+    if (overlay) overlay.classList.add('visible');
+    if (wrapper) wrapper.style.cursor = 'default';
+    clearTimeout(playerOverlayTimer);
+    if (!video.paused) {
+      playerOverlayTimer = setTimeout(() => {
+        if (overlay) overlay.classList.remove('visible');
+        if (wrapper && !video.paused) wrapper.style.cursor = 'none';
+      }, 3000);
+    }
+  }
+
+  if (wrapper) {
+    wrapper.onmousemove = resetOverlayTimer;
+    wrapper.ontouchstart = resetOverlayTimer;
+  }
+
+  // Mobile double-tap seek detection
+  let lastTapTime = 0;
+  let lastTapX = 0;
+  if (wrapper) {
+    wrapper.addEventListener('touchend', (e) => {
+      const now = Date.now();
+      const touch = e.changedTouches[0];
+      if (!touch) return;
+      const rect = wrapper.getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const diffTime = now - lastTapTime;
+      const diffX = Math.abs(x - lastTapX);
+
+      if (diffTime < 350 && diffX < 80) {
+        e.preventDefault();
+        const half = rect.width / 2;
+        if (x < half) {
+          seekBy(-10);
+          showTapRipple('tapLeft');
+        } else {
+          seekBy(10);
+          showTapRipple('tapRight');
+        }
+      }
+      lastTapTime = now;
+      lastTapX = x;
+    });
+  }
+
+  // Interactive scrubber bar
+  function seekToScrubberClientX(clientX) {
+    if (!scrubber || !video.duration) return;
+    const rect = scrubber.getBoundingClientRect();
+    const pos = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    video.currentTime = pos * video.duration;
+    if (scrubberFill) scrubberFill.style.width = `${pos * 100}%`;
+  }
+
+  if (scrubber) {
+    scrubber.addEventListener('mousemove', (e) => {
+      if (!video.duration || !timeTooltip) return;
+      const rect = scrubber.getBoundingClientRect();
+      const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      timeTooltip.style.display = 'block';
+      timeTooltip.style.left = `${pos * 100}%`;
+      timeTooltip.textContent = formatTime(pos * video.duration);
+    });
+
+    scrubber.addEventListener('mouseleave', () => {
+      if (timeTooltip) timeTooltip.style.display = 'none';
+    });
+
+    scrubber.addEventListener('mousedown', (e) => {
+      scrubberDragActive = true;
+      seekToScrubberClientX(e.clientX);
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (scrubberDragActive) seekToScrubberClientX(e.clientX);
+    });
+
+    window.addEventListener('mouseup', () => {
+      scrubberDragActive = false;
+    });
+  }
+
+  // Buffer progress
+  video.onprogress = () => {
+    if (video.buffered.length > 0 && video.duration) {
+      const bufEnd = video.buffered.end(video.buffered.length - 1);
+      const pct = Math.min(100, (bufEnd / video.duration) * 100);
+      if (scrubberBuffer) scrubberBuffer.style.width = `${pct}%`;
+    }
+  };
 
   // Function to save progress
   function saveCurrentProgress(isFinished = false) {
@@ -627,9 +908,7 @@ function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
     if (!resumeApplied && resumeTarget > 5 && video.duration && video.readyState >= 1) {
       resumeApplied = true;
       video.currentTime = resumeTarget;
-      const m = Math.floor(resumeTarget / 60);
-      const s = String(Math.floor(resumeTarget % 60)).padStart(2, '0');
-      toast(`Resumed playback at ${m}:${s}`);
+      toast(`Resumed playback at ${formatTime(resumeTarget)}`);
     }
   }
 
@@ -646,9 +925,19 @@ function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
     });
     currentHls.loadSource(streamUrl);
     currentHls.attachMedia(video);
+
     currentHls.on(Hls.Events.MANIFEST_PARSED, () => {
+      if (qualitySelect && currentHls.levels && currentHls.levels.length) {
+        qualitySelect.innerHTML = '<option value="-1">Auto</option>' +
+          currentHls.levels.map((lvl, idx) => `<option value="${idx}">${lvl.height ? lvl.height + 'p' : 'Level ' + (idx + 1)}</option>`).join('');
+        qualitySelect.onchange = (e) => {
+          currentHls.currentLevel = parseInt(e.target.value, 10);
+          toast(`Quality set to ${e.target.options[e.target.selectedIndex].text}`, 1500);
+        };
+      }
       video.play().catch(() => {});
     });
+
     currentHls.on(Hls.Events.ERROR, (event, data) => {
       if (data.fatal) {
         switch (data.type) {
@@ -682,7 +971,6 @@ function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
   }).catch(() => {});
 
   // Fetch AniSkip intervals (Skip Intro / Outro)
-  const skipBtn = document.getElementById('skipBtn');
   activeSkipIntervals = [];
 
   video.addEventListener('loadedmetadata', () => {
@@ -695,21 +983,39 @@ function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
     }).catch(() => {});
   });
 
-  // Time update event for Skip button & Progress sync
+  // Time update event for Scrubber, Auto-Skip & AniSkip button
   video.ontimeupdate = () => {
     const t = video.currentTime;
-    
-    // Check if within skip interval
+    const dur = video.duration || 0;
+
+    // Update scrubber UI
+    if (!scrubberDragActive && scrubberFill && dur > 0) {
+      scrubberFill.style.width = `${(t / dur) * 100}%`;
+    }
+    if (timeDisplay && dur > 0) {
+      timeDisplay.textContent = `${formatTime(t)} / ${formatTime(dur)}`;
+    }
+
+    // Auto-Skip / Skip Button handling
+    const isAutoSkip = autoSkipToggle ? autoSkipToggle.checked : true;
     const match = activeSkipIntervals.find(i => t >= i.start && t < i.end);
     if (match) {
-      skipBtn.style.display = 'flex';
-      skipBtn.textContent = match.type === 'op' ? '⚡ Skip Intro' : '⚡ Skip Outro';
-      skipBtn.onclick = () => {
+      if (isAutoSkip) {
         video.currentTime = match.end + 0.5;
-        skipBtn.style.display = 'none';
-      };
+        if (skipBtn) skipBtn.style.display = 'none';
+        toast(`⚡ Auto-skipped ${match.type === 'op' ? 'Opening' : 'Ending'}`, 2000);
+      } else {
+        if (skipBtn) {
+          skipBtn.style.display = 'flex';
+          skipBtn.textContent = match.type === 'op' ? '⚡ Skip Intro' : '⚡ Skip Outro';
+          skipBtn.onclick = () => {
+            video.currentTime = match.end + 0.5;
+            skipBtn.style.display = 'none';
+          };
+        }
+      }
     } else {
-      skipBtn.style.display = 'none';
+      if (skipBtn) skipBtn.style.display = 'none';
     }
   };
 
@@ -733,31 +1039,53 @@ function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
     }
   };
 
-  // Keyboard Shortcuts
+  // Modern Keyboard Shortcuts
   window.onkeydown = (e) => {
-    if (['input', 'textarea'].includes(document.activeElement.tagName.toLowerCase())) return;
-    if (e.code === 'Space') {
+    if (['input', 'textarea', 'select'].includes(document.activeElement.tagName.toLowerCase())) return;
+    if (e.code === 'Space' || e.key === 'k' || e.key === 'K') {
       e.preventDefault();
-      video.paused ? video.play() : video.pause();
-    } else if (e.code === 'ArrowRight') {
+      togglePlay();
+    } else if (e.code === 'ArrowRight' || e.key === 'l' || e.key === 'L') {
       e.preventDefault();
-      video.currentTime = Math.min(video.duration || 0, video.currentTime + 5);
-    } else if (e.code === 'ArrowLeft') {
+      seekBy(10);
+    } else if (e.code === 'ArrowLeft' || e.key === 'j' || e.key === 'J') {
       e.preventDefault();
-      video.currentTime = Math.max(0, video.currentTime - 5);
+      seekBy(-10);
+    } else if (e.code === 'ArrowUp') {
+      e.preventDefault();
+      video.volume = Math.min(1, video.volume + 0.1);
+      toast(`Volume ${Math.round(video.volume * 100)}%`, 800);
+    } else if (e.code === 'ArrowDown') {
+      e.preventDefault();
+      video.volume = Math.max(0, video.volume - 0.1);
+      toast(`Volume ${Math.round(video.volume * 100)}%`, 800);
     } else if (e.code === 'KeyF') {
       e.preventDefault();
       if (!document.fullscreenElement) {
-        document.getElementById('videoWrapper').requestFullscreen().catch(() => {});
+        document.getElementById('videoWrapper')?.requestFullscreen().catch(() => {});
       } else {
         document.exitFullscreen().catch(() => {});
+      }
+    } else if (e.code === 'KeyT') {
+      e.preventDefault();
+      toggleTheaterMode();
+    } else if (e.code === 'KeyP') {
+      e.preventDefault();
+      if (document.pictureInPictureElement) {
+        document.exitPictureInPicture().catch(() => {});
+      } else if (video.requestPictureInPicture) {
+        video.requestPictureInPicture().catch(() => {});
       }
     } else if (e.code === 'KeyM') {
       e.preventDefault();
       video.muted = !video.muted;
+      toast(video.muted ? "Muted" : "Unmuted", 800);
     } else if (e.code === 'KeyN' && nextEpisode) {
       e.preventDefault();
       location.hash = `#/watch/${post.id}?ep=${nextEpisode.id}`;
+    } else if (e.key === '?') {
+      e.preventDefault();
+      toggleHelpModal();
     }
   };
 }
@@ -899,6 +1227,266 @@ async function viewSearch(query, page = 1) {
   }
 }
 
+// 6. Binge Roulette & Smart Recommendation Engine
+async function viewBinge() {
+  setActiveNav('binge');
+  let currentVibe = 'junk';
+  let currentLength = 'any';
+  let isHiddenGems = true;
+
+  const vibes = [
+    { id: 'junk', label: '🍿 Pure Junk Food', desc: 'Secret OP MC, cheat magic flexes, instant dopamine' },
+    { id: 'hype', label: '🔥 Pure Hype & Sakuga', desc: 'High stakes, god-tier battles, zero drag' },
+    { id: 'mind_games', label: '🧠 200 IQ Mind Games', desc: 'Masterminds, psychological chess, deception' },
+    { id: 'dark', label: '💀 Dark & Gritty', desc: 'High tension, gritty survival, relentless mystery' },
+    { id: 'chill', label: '☕ Cozy & Wholesome', desc: 'Wholesome laughs, low stress comfort watching' },
+    { id: 'feels', label: '😭 Emotional Damage', desc: 'Tearjerkers, bittersweet drama, deep bonds' }
+  ];
+
+  render(`
+    <div class="binge-container">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title" style="font-size:26px;">🎲 Binge Roulette</h1>
+          <p style="color:var(--text-dim);font-size:14px;margin-top:4px;">
+            Pick a craving and spin to discover your next obsession with zero decision paralysis.
+          </p>
+        </div>
+      </div>
+
+      <div class="binge-picker-card">
+        <label style="font-size:13px;font-weight:700;color:var(--text-dim);letter-spacing:0.5px;">1. CHOOSE YOUR VIBE</label>
+        <div class="vibe-pill-group" id="vibePills">
+          ${vibes.map(v => `
+            <button class="vibe-pill ${v.id === currentVibe ? 'active' : ''}" data-vibe="${v.id}" title="${esc(v.desc)}">
+              ${v.label}
+            </button>
+          `).join('')}
+        </div>
+
+        <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center;justify-content:space-between;border-top:1px solid var(--border-line);padding-top:16px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <label style="font-size:13px;font-weight:700;color:var(--text-dim);">LENGTH:</label>
+            <select id="bingeLengthSelect" class="ctrl-select" style="padding:6px 12px;font-size:13px;">
+              <option value="any" selected>Any Length</option>
+              <option value="short">Quick Binge (11-13 eps)</option>
+              <option value="medium">Standard Season (22-26 eps)</option>
+              <option value="long">Long Journey (40+ eps)</option>
+            </select>
+          </div>
+
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text-dim);cursor:pointer;">
+            <input type="checkbox" id="bingeGemsToggle" ${isHiddenGems ? 'checked' : ''} style="accent-color:var(--accent-orange);cursor:pointer;">
+            <span>💎 Hidden Gems (Skip ubiquitous Top 100)</span>
+          </label>
+
+          <button id="spinBtn" class="btn btn-primary" style="padding:10px 24px;font-size:15px;box-shadow:0 4px 18px rgba(255,100,10,0.4);">
+            🎰 Spin Roulette
+          </button>
+        </div>
+      </div>
+
+      <div id="bingeResultArea">
+        <div style="text-align:center;padding:50px 20px;color:var(--text-dim);">
+          Hit <strong style="color:var(--accent-orange);">Spin Roulette</strong> to roll a personalized pick!
+        </div>
+      </div>
+    </div>
+  `);
+
+  // Event handlers
+  document.querySelectorAll('#vibePills .vibe-pill').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('#vibePills .vibe-pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentVibe = btn.dataset.vibe;
+    };
+  });
+
+  const lengthSelect = document.getElementById('bingeLengthSelect');
+  if (lengthSelect) {
+    lengthSelect.onchange = (e) => { currentLength = e.target.value; };
+  }
+
+  const gemsToggle = document.getElementById('bingeGemsToggle');
+  if (gemsToggle) {
+    gemsToggle.onchange = (e) => { isHiddenGems = e.target.checked; };
+  }
+
+  const spinBtn = document.getElementById('spinBtn');
+  if (spinBtn) {
+    spinBtn.onclick = () => runRoulette();
+  }
+
+  async function runRoulette() {
+    const resArea = document.getElementById('bingeResultArea');
+    if (!resArea) return;
+
+    resArea.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;padding:60px 0;gap:14px;">
+        <div class="spinner"></div>
+        <div style="color:var(--text-dim);font-size:14px;">Shuffling AniList discovery pool...</div>
+      </div>
+    `;
+
+    try {
+      const data = await API.binge(currentVibe, currentLength, isHiddenGems);
+      const recs = data.recommendations || [];
+
+      if (!recs.length) {
+        resArea.innerHTML = `
+          <div style="text-align:center;padding:40px 20px;background:var(--bg-card);border-radius:var(--radius-md);border:1px solid var(--border-line);">
+            <h3>No matches found in this pool</h3>
+            <p style="color:var(--text-dim);margin:8px 0 16px;">Try unticking Hidden Gems or changing the episode length.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const top = recs[0];
+      const others = recs.slice(1, 7);
+
+      resArea.innerHTML = `
+        <div class="binge-match-card">
+          <div style="border-radius:var(--radius-md);overflow:hidden;box-shadow:var(--shadow-md);">
+            <img src="${top.cover || '/static/placeholder.png'}" alt="" style="width:100%;height:100%;object-fit:cover;min-height:300px;" onerror="this.src='/static/placeholder.png'">
+          </div>
+          <div style="display:flex;flex-direction:column;justify-content:space-between;gap:16px;">
+            <div>
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+                <span class="card-score" style="position:static;font-size:13px;padding:3px 8px;">★ ${top.score || 'N/A'}%</span>
+                <span style="font-size:13px;color:var(--text-dim);">${top.episodes} Episodes</span>
+                <span style="font-size:13px;color:var(--accent-orange);font-weight:700;">🎯 VIBE MATCH</span>
+              </div>
+              <h2 style="font-size:24px;font-weight:800;color:#fff;line-height:1.2;margin-bottom:6px;">${esc(top.title)}</h2>
+              ${top.title_romaji && top.title_romaji !== top.title ? `<div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">${esc(top.title_romaji)}</div>` : ''}
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 16px;">
+                ${(top.genres || []).map(g => `<span class="tag">${esc(g)}</span>`).join('')}
+              </div>
+              <p style="font-size:14px;line-height:1.6;color:#ccd2e2;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;">
+                ${esc(top.description || 'No synopsis provided.')}
+              </p>
+            </div>
+
+            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding-top:12px;border-top:1px solid var(--border-line);">
+              <a href="#/search?q=${encodeURIComponent(top.title)}" class="btn btn-primary" style="padding:10px 22px;">
+                ▶ Stream Now
+              </a>
+              <button class="btn btn-secondary" onclick="document.getElementById('spinBtn').click()">
+                🎲 Spin Again
+              </button>
+            </div>
+          </div>
+        </div>
+
+        ${others.length ? `
+          <div class="section" style="margin-top:36px;">
+            <div class="section-header">
+              <h3 class="section-title" style="font-size:18px;">More Recommendations For This Vibe</h3>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(160px, 1fr));gap:16px;">
+              ${others.map(r => `
+                <a class="anime-card" href="#/search?q=${encodeURIComponent(r.title)}">
+                  <div class="card-poster">
+                    <img src="${r.cover || ''}" alt="" onerror="this.src='/static/placeholder.png'">
+                    ${r.score ? `<div class="card-score">★ ${r.score}%</div>` : ''}
+                  </div>
+                  <div class="card-info">
+                    <div class="card-title">${esc(r.title)}</div>
+                    <div class="card-meta">${r.episodes ? r.episodes + ' eps' : ''}</div>
+                  </div>
+                </a>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+      `;
+    } catch (err) {
+      resArea.innerHTML = `
+        <div style="padding:30px;text-align:center;color:var(--accent-red);">
+          Binge Discovery Error: ${esc(err.message)}
+        </div>
+      `;
+    }
+  }
+
+  // Auto-run roulette on first view
+  runRoulette();
+}
+
+// 7. Airing Today View
+async function viewToday() {
+  setActiveNav('today');
+  render(`
+    <div style="display:flex;justify-content:center;padding:80px 0;">
+      <div class="spinner"></div>
+    </div>
+  `);
+
+  try {
+    const data = await API.today();
+    const list = data.schedule || [];
+
+    if (!list.length) {
+      render(`
+        <div style="text-align:center;padding:80px 20px;">
+          <h2>No Airing Releases Found Today</h2>
+          <p style="color:var(--text-dim);margin-top:8px;">AniList reports no active broadcast schedules in the current window.</p>
+        </div>
+      `);
+      return;
+    }
+
+    const todayStr = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date());
+
+    render(`
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">📅 Airing Radar — ${todayStr}</h1>
+          <p style="color:var(--text-dim);font-size:14px;margin-top:4px;">
+            Real-time schedule of new episodes dropping worldwide today (${list.length} releases).
+          </p>
+        </div>
+      </div>
+
+      <div class="airing-schedule-list">
+        ${list.map(s => {
+          const isAired = s.is_aired;
+          const badgeClass = isAired ? 'aired' : 'upcoming';
+          return `
+            <div class="airing-row">
+              <div style="display:flex;align-items:center;gap:16px;flex:1;min-width:0;">
+                <div style="width:48px;height:64px;border-radius:var(--radius-sm);overflow:hidden;flex-shrink:0;background:var(--border-line);">
+                  <img src="${s.cover || '/static/placeholder.png'}" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.src='/static/placeholder.png'">
+                </div>
+                <div style="min-width:0;flex:1;">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+                    <span class="airing-badge ${badgeClass}">${s.status_icon} ${esc(s.status_str)}</span>
+                    <span style="font-size:12px;font-weight:700;color:var(--accent-orange);">Episode ${s.episode}</span>
+                    ${s.score ? `<span style="font-size:12px;color:var(--text-dim);">★ ${s.score}%</span>` : ''}
+                  </div>
+                  <div style="font-size:15px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                    ${esc(s.title)}
+                  </div>
+                  ${s.genres && s.genres.length ? `<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${esc(s.genres.slice(0, 3).join(' • '))}</div>` : ''}
+                </div>
+              </div>
+
+              <div style="flex-shrink:0;">
+                <a href="#/search?q=${encodeURIComponent(s.title)}" class="btn btn-secondary btn-sm" title="Search and stream episode">
+                  ▶ Watch
+                </a>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `);
+  } catch (err) {
+    render(`<div style="padding:40px;text-align:center;">Failed to load airing radar: ${esc(err.message)}</div>`);
+  }
+}
+
 // --------------------------------------------------------------------------
 // Router
 // --------------------------------------------------------------------------
@@ -916,6 +1504,10 @@ function route() {
     viewPost(seg[1]);
   } else if (seg[0] === 'watch' && seg[1]) {
     viewWatch(seg[1], params.get('ep'), params.get('srv'));
+  } else if (seg[0] === 'binge') {
+    viewBinge();
+  } else if (seg[0] === 'today') {
+    viewToday();
   } else if (seg[0] === 'watchlist') {
     viewWatchlist();
   } else if (seg[0] === 'search') {

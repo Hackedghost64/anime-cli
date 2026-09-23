@@ -71,7 +71,8 @@ def parse_airing_schedule(entries: List[Dict[str, Any]], current_time: Optional[
             "status_str": status_str,
             "score": score,
             "format": media.get("format", "TV"),
-            "genres": genres
+            "genres": genres,
+            "cover": (media.get("coverImage") or {}).get("large", "")
         })
 
     # Sort: Aired shows first (newest to oldest), then upcoming shows
@@ -96,6 +97,9 @@ async def fetch_today_airing_schedule() -> List[Dict[str, Any]]:
             title {
               english
               romaji
+            }
+            coverImage {
+              large
             }
             averageScore
             format

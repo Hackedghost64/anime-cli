@@ -26,7 +26,10 @@
 
     <nav class="nav-links">
       <a href="#/" class="nav-link active" data-nav="home">Home</a>
-      <a href="#/watchlist" class="nav-link" data-nav="watchlist">My Watchlist</a>
+      <a href="#/binge" class="nav-link" data-nav="binge">🎲 Binge Radar</a>
+      <a href="#/today" class="nav-link" data-nav="today">📅 Airing Today</a>
+      <a href="#/watchlist" class="nav-link" data-nav="watchlist">📑 Watchlist</a>
+      <button class="nav-btn-help" onclick="toggleHelpModal()" title="Keyboard Shortcuts & Help">❓ Help</button>
     </nav>
 
     <div class="search-box">
@@ -48,15 +51,63 @@
       <span class="icon">🏠</span>
       <span>Home</span>
     </a>
-    <a href="javascript:void(0)" class="mobile-nav-item" onclick="document.getElementById('globalSearch')?.focus()">
-      <span class="icon">🔍</span>
-      <span>Search</span>
+    <a href="#/binge" class="mobile-nav-item" data-nav="binge">
+      <span class="icon">🎲</span>
+      <span>Binge</span>
+    </a>
+    <a href="#/today" class="mobile-nav-item" data-nav="today">
+      <span class="icon">📅</span>
+      <span>Today</span>
     </a>
     <a href="#/watchlist" class="mobile-nav-item" data-nav="watchlist">
       <span class="icon">📑</span>
       <span>Watchlist</span>
     </a>
+    <a href="javascript:void(0)" class="mobile-nav-item" onclick="toggleHelpModal()">
+      <span class="icon">❓</span>
+      <span>Help</span>
+    </a>
   </nav>
+
+  <!-- Help & Shortcuts Modal -->
+  <div id="helpModal" class="modal-backdrop" style="display:none;" onclick="if(event.target===this) toggleHelpModal()">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:22px;">⚡</span>
+          <div>
+            <h3 style="font-size:18px;font-weight:800;color:#fff;">Help & Keyboard Shortcuts</h3>
+            <p style="font-size:12px;color:var(--text-dim);">Master your anime streaming experience</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="toggleHelpModal()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="shortcuts-grid">
+          <div class="shortcut-row"><span class="shortcut-key">Space</span> / <span class="shortcut-key">K</span><span class="shortcut-desc">Play / Pause playback</span></div>
+          <div class="shortcut-row"><span class="shortcut-key">←</span> / <span class="shortcut-key">→</span><span class="shortcut-desc">Seek 5s backward / forward</span></div>
+          <div class="shortcut-row"><span class="shortcut-key">J</span> / <span class="shortcut-key">L</span><span class="shortcut-desc">Seek 10s backward / forward</span></div>
+          <div class="shortcut-row"><span class="shortcut-key">F</span><span class="shortcut-desc">Toggle Fullscreen</span></div>
+          <div class="shortcut-row"><span class="shortcut-key">T</span><span class="shortcut-desc">Toggle Theater Mode</span></div>
+          <div class="shortcut-row"><span class="shortcut-key">P</span><span class="shortcut-desc">Picture-in-Picture (PiP)</span></div>
+          <div class="shortcut-row"><span class="shortcut-key">M</span><span class="shortcut-desc">Mute / Unmute audio</span></div>
+          <div class="shortcut-row"><span class="shortcut-key">N</span><span class="shortcut-desc">Autoplay Next Episode</span></div>
+          <div class="shortcut-row"><span class="shortcut-key">?</span> / <span class="shortcut-key">H</span><span class="shortcut-desc">Open this Help modal</span></div>
+        </div>
+
+        <div class="help-tips">
+          <div class="help-tip-title">📱 Mobile Gestures & Features:</div>
+          <ul class="help-tip-list">
+            <li><strong>Double-Tap Left:</strong> Jump back 10 seconds with ripple.</li>
+            <li><strong>Double-Tap Right:</strong> Jump forward 10 seconds.</li>
+            <li><strong>⚡ AniSkip:</strong> Openings & Endings automatically detect skip intervals from AniList.</li>
+            <li><strong>☕ Background Streaming:</strong> Use <code>anime-cli -s</code> on your PC to inhibit sleep and stream from anywhere on mobile data or Wi-Fi.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Toast Notification Hub -->
   <div id="toast-container"></div>
