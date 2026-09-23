@@ -47,7 +47,7 @@ async def record_progress(request: Request):
         duration=duration,
         anime_title=data.get("anime_title") or "",
         anime_poster=data.get("anime_poster") or "",
-        ep_num=str(data.get("ep_num") or ""),
+        ep_num=str(data.get("ep_num")) if data.get("ep_num") is not None else "",
         ep_name=data.get("ep_name") or ""
     )
     return {"ok": True}

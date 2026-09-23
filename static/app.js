@@ -440,7 +440,7 @@ async function viewWatch(pid, epIdPref, srvPref) {
     const progressMap = progData.progress || {};
     let curEp = null;
     if (epIdPref) {
-      curEp = episodes.find(e => String(e.id) === String(epIdPref));
+      curEp = episodes.find(e => String(e.id) === String(epIdPref) || String(e.num) === String(epIdPref));
     }
     if (!curEp) {
       let latestWatched = null;
@@ -503,13 +503,18 @@ async function viewWatch(pid, epIdPref, srvPref) {
         </div>
 
         <aside class="watch-sidebar">
-          <div class="sidebar-header">
-            <span>Episodes</span>
-            <span style="font-size:12px;color:var(--text-dim);">${episodes.length} total</span>
+          <div class="sidebar-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <div>
+              <span>Episodes</span>
+              <span style="font-size:12px;color:var(--text-dim);margin-left:6px;">${episodes.length} total</span>
+            </div>
+            ${episodes.length > 8 ? `
+              <input type="text" id="sidebarEpFilter" placeholder="Find ep #..." style="width:105px;padding:4px 8px;font-size:12px;background:var(--bg-main);border:1px solid var(--border-line);border-radius:var(--radius-sm);color:#fff;outline:none;">
+            ` : ''}
           </div>
-          <div class="sidebar-list">
+          <div class="sidebar-list" id="sidebarEpList">
             ${episodes.map(ep => `
-              <a class="sidebar-item ${ep.id === curEp.id ? 'active' : ''}" href="#/watch/${pid}?ep=${ep.id}">
+              <a class="sidebar-item ${String(ep.id) === String(curEp.id) ? 'active' : ''}" href="#/watch/${pid}?ep=${ep.id}">
                 <span><strong>#${ep.num || '?'}</strong> ${esc(ep.name || 'Episode ' + ep.num)}</span>
               </a>
             `).join('')}
@@ -518,14 +523,39 @@ async function viewWatch(pid, epIdPref, srvPref) {
       </div>
     `);
 
+    // Auto-scroll sidebar to active episode
+    setTimeout(() => {
+      const activeSidebarItem = document.querySelector('.watch-sidebar .sidebar-item.active');
+      if (activeSidebarItem) {
+        activeSidebarItem.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }, 120);
+
+    // Sidebar episode quick filter
+    const sbFilter = document.getElementById('sidebarEpFilter');
+    if (sbFilter) {
+      sbFilter.oninput = (e) => {
+        const val = e.target.value.toLowerCase().trim();
+        document.querySelectorAll('#sidebarEpList .sidebar-item').forEach(item => {
+          item.style.display = item.textContent.toLowerCase().includes(val) ? 'flex' : 'none';
+        });
+      };
+    }
+
     const curIdx = episodes.findIndex(e => String(e.id) === String(curEp.id));
     const prevEp = episodes[curIdx - 1];
     const nextEp = episodes[curIdx + 1];
 
-    document.getElementById('btnPrevEp').disabled = !prevEp;
-    document.getElementById('btnPrevEp').onclick = () => { if (prevEp) location.hash = `#/watch/${pid}?ep=${prevEp.id}`; };
-    document.getElementById('btnNextEp').disabled = !nextEp;
-    document.getElementById('btnNextEp').onclick = () => { if (nextEp) location.hash = `#/watch/${pid}?ep=${nextEp.id}`; };
+    const btnPrev = document.getElementById('btnPrevEp');
+    if (btnPrev) {
+      btnPrev.disabled = !prevEp;
+      btnPrev.onclick = () => { if (prevEp) location.hash = `#/watch/${pid}?ep=${prevEp.id}`; };
+    }
+    const btnNext = document.getElementById('btnNextEp');
+    if (btnNext) {
+      btnNext.disabled = !nextEp;
+      btnNext.onclick = () => { if (nextEp) location.hash = `#/watch/${pid}?ep=${nextEp.id}`; };
+    }
 
     const srvData = await API.servers(pid, curEp.id);
     const servers = srvData.servers || [];
@@ -565,8 +595,15 @@ async function viewWatch(pid, epIdPref, srvPref) {
     function updateServerOptions() {
       const list = activeLang === 'sub' ? subs : dubs;
       const sSelect = document.getElementById('serverSelect');
+      if (!sSelect) return;
       sSelect.innerHTML = list.map((s, idx) => `<option value="${s.id}">${s.name || `Server ${idx + 1}`}</option>`).join('');
-      if (list.length > 0) loadServerStream(list[0].id);
+      let chosenServer = list[0]?.id;
+      if (srvPref && list.some(s => s.id === srvPref)) {
+        chosenServer = srvPref;
+        sSelect.value = srvPref;
+      }
+      srvPref = null; // Clear so subsequent manual language toggles default to list[0]
+      if (chosenServer) loadServerStream(chosenServer);
     }
 
     if (subs.length) {
@@ -594,21 +631,42 @@ async function viewWatch(pid, epIdPref, srvPref) {
     async function loadServerStream(serverId) {
       const loader = document.getElementById('playerLoader');
       const loaderText = document.getElementById('loaderText');
-      loader.style.display = 'flex';
-      loaderText.textContent = 'Extracting and proxying stream...';
+      if (loader) loader.style.display = 'flex';
+      if (loaderText) loaderText.textContent = 'Extracting and proxying stream...';
+
+      // Preserve current position if switching servers mid-episode
+      const switchResumePos = (window._vidstackPlayer && window._vidstackPlayer.currentTime > 5)
+        ? window._vidstackPlayer.currentTime
+        : null;
 
       try {
         const streamData = await API.stream(pid, serverId);
         const proxyUrl = streamData.proxy_url;
         if (!proxyUrl) throw new Error("Stream URL could not be resolved.");
-        await initVideoPlayer(proxyUrl, post, curEp, nextEp);
-        loader.style.display = 'none';
+        await initVideoPlayer(proxyUrl, post, curEp, nextEp, switchResumePos);
+        if (loader) loader.style.display = 'none';
       } catch (err) {
-        loaderText.innerHTML = `
-          <div style="color:var(--accent-red);font-weight:700;">Stream Error</div>
-          <div style="font-size:12px;margin:8px 0;">${esc(err.message)}</div>
-          <button class="btn btn-primary btn-sm" onclick="location.reload()">Retry</button>
-        `;
+        const list = activeLang === 'sub' ? subs : dubs;
+        const curIdx = list.findIndex(s => s.id === serverId);
+        const nextServer = list[curIdx + 1];
+        if (loaderText) {
+          loaderText.innerHTML = `
+            <div style="color:var(--accent-red);font-weight:700;font-size:15px;">Stream Error</div>
+            <div style="font-size:12px;margin:8px 0;color:var(--text-dim);">${esc(err.message)}</div>
+            <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
+              <button class="btn btn-primary btn-sm" onclick="location.reload()">Retry</button>
+              ${nextServer ? `<button class="btn btn-secondary btn-sm" id="btnFallbackServer">Try ${esc(nextServer.name || 'Next Server')}</button>` : ''}
+            </div>
+          `;
+          const fallbackBtn = document.getElementById('btnFallbackServer');
+          if (fallbackBtn && nextServer) {
+            fallbackBtn.onclick = () => {
+              const sSel = document.getElementById('serverSelect');
+              if (sSel) sSel.value = nextServer.id;
+              loadServerStream(nextServer.id);
+            };
+          }
+        }
       }
     }
   } catch (err) {
@@ -646,7 +704,7 @@ async function getVidstack() {
   }
 }
 
-async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
+async function initVideoPlayer(streamUrl, post, episode, nextEpisode, startPosOverride = null) {
   cleanUpPlayer();
   currentPost = post;
   currentEp = episode;
@@ -666,6 +724,8 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
       src: { src: streamUrl, type: 'application/x-mpegurl' },
       title: `${post.title} - Ep ${episode.num}`,
       autoplay: true,
+      storage: 'shinsei_player_storage',
+      keyTarget: 'document',
       layout: new VidstackPlayerLayout({
         colorScheme: 'dark'
       }),
@@ -793,8 +853,8 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
           duration: dur,
           anime_title: post.title || '',
           anime_poster: post.poster || '',
-          ep_num: String(episode.num || ''),
-          ep_name: episode.name || ('Episode ' + episode.num)
+          ep_num: String(episode.num !== undefined && episode.num !== null ? episode.num : ''),
+          ep_name: episode.name || ('Episode ' + (episode.num !== undefined ? episode.num : '?'))
         }).catch(() => {});
       }
     };
@@ -815,8 +875,8 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
           duration: player.duration || 0,
           anime_title: post.title || '',
           anime_poster: post.poster || '',
-          ep_num: String(episode.num || ''),
-          ep_name: episode.name || ('Episode ' + episode.num)
+          ep_num: String(episode.num !== undefined && episode.num !== null ? episode.num : ''),
+          ep_name: episode.name || ('Episode ' + (episode.num !== undefined ? episode.num : '?'))
         });
         if (navigator.sendBeacon) {
           navigator.sendBeacon('/api/user/progress', new Blob([payload], { type: 'application/json' }));
@@ -826,8 +886,18 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
     window.addEventListener('beforeunload', onUnload);
     window.addEventListener('pagehide', onUnload);
 
-    // Resume from saved progress without race condition
-    API.getProgress(post.id).then(res => {
+    // Stream error handling
+    player.addEventListener('error', (e) => {
+      console.warn("Vidstack stream playback warning:", e);
+      toast("Stream error. Try switching to a different server.", 4000);
+    });
+
+    // Resume from saved progress or override without race condition
+    const getSavedProg = (startPosOverride !== null && startPosOverride > 5)
+      ? Promise.resolve({ progress: { [episode.id]: { position: startPosOverride } } })
+      : API.getProgress(post.id);
+
+    getSavedProg.then(res => {
       const prog = res.progress && res.progress[episode.id];
       if (prog && prog.position && prog.position > 5) {
         const doResume = () => {
@@ -847,15 +917,18 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
       saveProgress(player.duration, player.duration, true);
       if (nextEpisode) {
         toast(`Episode ended. Autoplaying #${nextEpisode.num}...`, 2500);
-        setTimeout(() => {
+        window._autoplayTimer = setTimeout(() => {
           location.hash = `#/watch/${post.id}?ep=${nextEpisode.id}`;
         }, 1200);
+      } else {
+        toast("🎉 You've reached the latest episode!", 3500);
       }
     });
 
     // AniSkip integration
     let markers = { introStart: null, introEnd: null, creditsStart: null };
-    API.getSkipTimes(post.title, parseInt(episode.num, 10) || 1, 1440).then(res => {
+    const epNumParsed = isNaN(parseInt(episode.num, 10)) ? 1 : parseInt(episode.num, 10);
+    API.getSkipTimes(post.title, epNumParsed, 1440).then(res => {
       if (res.found && res.results) {
         const op = res.results.find(r => r.type === 'op');
         const ed = res.results.find(r => r.type === 'ed');
@@ -874,10 +947,16 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
           player.currentTime = markers.introEnd + 0.5;
           skipBtn.style.display = 'none';
           toast("⚡ Skipped Intro", 1500);
-        } else if (skipAction === 'outro' && player.duration) {
-          player.currentTime = player.duration - 1;
+        } else if (skipAction === 'outro') {
           skipBtn.style.display = 'none';
-          toast("⚡ Skipped Outro", 1500);
+          if (nextEpisode) {
+            toast(`⚡ Skipping Outro → Autoplaying #${nextEpisode.num}...`, 1800);
+            saveProgress(player.duration, player.duration, true);
+            location.hash = `#/watch/${post.id}?ep=${nextEpisode.id}`;
+          } else if (player.duration) {
+            player.currentTime = player.duration - 1;
+            toast("⚡ Skipped Outro", 1500);
+          }
         }
       };
     }
@@ -908,7 +987,19 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
       } else if (e.code === 'KeyN' && nextEpisode) {
         e.preventDefault();
         location.hash = `#/watch/${post.id}?ep=${nextEpisode.id}`;
-      } else if (e.key === '?') {
+      } else if (e.code === 'KeyP') {
+        e.preventDefault();
+        try {
+          if (document.pictureInPictureElement) {
+            document.exitPictureInPicture().catch(() => {});
+          } else {
+            const vid = player.querySelector('video') || document.querySelector('video');
+            if (vid && vid.requestPictureInPicture) {
+              vid.requestPictureInPicture().catch(() => {});
+            }
+          }
+        } catch (err) {}
+      } else if (e.key === '?' || e.code === 'KeyH') {
         e.preventDefault();
         toggleHelpModal();
       }
@@ -928,9 +1019,30 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
 }
 
 function cleanUpPlayer() {
+  if (window._autoplayTimer) {
+    try { clearTimeout(window._autoplayTimer); } catch (e) {}
+    window._autoplayTimer = null;
+  }
   if (window._vidstackObserver) {
     try { window._vidstackObserver.disconnect(); } catch (e) {}
     window._vidstackObserver = null;
+  }
+  // Exit hook save: Save playback progress on SPA navigation
+  if (window._vidstackPlayer && currentPost && currentEp) {
+    const pos = window._vidstackPlayer.currentTime;
+    const dur = window._vidstackPlayer.duration;
+    if (pos > 5 && dur > 0) {
+      API.saveProgress({
+        anime_id: String(currentPost.id),
+        ep_id: String(currentEp.id),
+        position: pos,
+        duration: dur,
+        anime_title: currentPost.title || '',
+        anime_poster: currentPost.poster || '',
+        ep_num: String(currentEp.num !== undefined && currentEp.num !== null ? currentEp.num : ''),
+        ep_name: currentEp.name || ('Episode ' + (currentEp.num !== undefined ? currentEp.num : '?'))
+      }).catch(() => {});
+    }
   }
   const videoWrapper = document.getElementById('videoWrapper');
   ['centerPlayBtn', 'playerNextEpBtn', 'skipBtn'].forEach(id => {
