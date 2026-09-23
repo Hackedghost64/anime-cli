@@ -462,14 +462,9 @@ async function viewWatch(pid, epIdPref, srvPref) {
 
       <div class="watch-container">
         <div class="player-stage">
-          <div class="video-wrapper" id="videoWrapper" style="position:relative; width:100%; aspect-ratio:16/9; background:#000;">
-            <div id="vidstackTarget" style="width:100%; height:100%;"></div>
-            
-            <button id="skipBtn" class="skip-button" style="display:none; position:absolute; bottom:80px; right:20px; z-index:50;">
-              ⚡ Skip Intro
-            </button>
-            <div id="tapLeft" class="tap-ripple left"><span>⏪ 10s</span></div>
-            <div id="tapRight" class="tap-ripple right"><span>10s ⏩</span></div>
+          <div class="video-wrapper" id="videoWrapper">
+            <div id="vidstackTarget"></div>
+            <button id="skipBtn" class="skip-button">⚡ Skip Intro</button>
             <div id="playerLoader" class="player-loader" style="display:none;">
               <div class="spinner"></div>
               <div id="loaderText" style="font-size:14px;color:var(--text-dim);">Resolving stream...</div>
@@ -597,24 +592,64 @@ async function viewWatch(pid, epIdPref, srvPref) {
   }
 }
 
+// Ensure Vidstack Player & Layout are loaded reliably
+async function getVidstack() {
+  if (window.VidstackPlayer && (window.VidstackPlayerLayout || window.VidstackPlayer.Layout?.Default)) {
+    return {
+      VidstackPlayer: window.VidstackPlayer,
+      VidstackPlayerLayout: window.VidstackPlayerLayout || window.VidstackPlayer.Layout.Default
+    };
+  }
+  try {
+    const mod = await import('https://cdn.vidstack.io/player');
+    const playerCls = mod.VidstackPlayer || window.VidstackPlayer;
+    const layoutCls = mod.VidstackPlayerLayout || playerCls?.Layout?.Default || window.VidstackPlayerLayout;
+    window.VidstackPlayer = playerCls;
+    window.VidstackPlayerLayout = layoutCls;
+    return { VidstackPlayer: playerCls, VidstackPlayerLayout: layoutCls };
+  } catch (err) {
+    console.error("Vidstack load error:", err);
+    return {
+      VidstackPlayer: window.VidstackPlayer,
+      VidstackPlayerLayout: window.VidstackPlayerLayout || window.VidstackPlayer?.Layout?.Default
+    };
+  }
+}
+
 async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
   cleanUpPlayer();
   currentPost = post;
   currentEp = episode;
 
   try {
+    const { VidstackPlayer, VidstackPlayerLayout } = await getVidstack();
+    if (!VidstackPlayer || !VidstackPlayerLayout) {
+      throw new Error("Vidstack Player components are unavailable.");
+    }
+
+    const target = document.getElementById('vidstackTarget');
+    if (!target) return;
+    target.innerHTML = '';
+
     const player = await VidstackPlayer.create({
-      target: '#vidstackTarget',
+      target: target,
       src: { src: streamUrl, type: 'application/x-mpegurl' },
       title: `${post.title} - Ep ${episode.num}`,
+      autoplay: true,
       layout: new VidstackPlayerLayout({
         colorScheme: 'dark'
       }),
       crossOrigin: true
     });
     window._vidstackPlayer = player;
-    
-    // Heartbeat
+
+    // Attach skip button into player so it remains accessible in fullscreen!
+    const skipBtn = document.getElementById('skipBtn');
+    if (skipBtn && player) {
+      player.appendChild(skipBtn);
+    }
+
+    // Heartbeat: save progress every 10s during active playback
     let lastHeartbeat = 0;
     const saveProgress = (pos, dur, finished = false) => {
       if (pos > 5 && dur > 0) {
@@ -628,18 +663,18 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
           anime_title: post.title || '',
           anime_poster: post.poster || '',
           ep_num: String(episode.num || ''),
-          ep_name: episode.name || ''
+          ep_name: episode.name || ('Episode ' + episode.num)
         }).catch(() => {});
       }
     };
-    
-    let hbTimer = setInterval(() => {
+
+    const hbTimer = setInterval(() => {
       if (player && !player.paused) {
         saveProgress(player.currentTime, player.duration);
       }
     }, 10000);
 
-    // Save on beforeunload
+    // Save progress on page close or navigation
     const onUnload = () => {
       if (player && player.currentTime > 5) {
         const payload = JSON.stringify({
@@ -650,7 +685,7 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
           anime_title: post.title || '',
           anime_poster: post.poster || '',
           ep_num: String(episode.num || ''),
-          ep_name: episode.name || ''
+          ep_name: episode.name || ('Episode ' + episode.num)
         });
         if (navigator.sendBeacon) {
           navigator.sendBeacon('/api/user/progress', new Blob([payload], { type: 'application/json' }));
@@ -660,20 +695,23 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
     window.addEventListener('beforeunload', onUnload);
     window.addEventListener('pagehide', onUnload);
 
-    // Resume from saved position
+    // Resume from saved progress without race condition
     API.getProgress(post.id).then(res => {
       const prog = res.progress && res.progress[episode.id];
       if (prog && prog.position && prog.position > 5) {
-        const onCanPlay = () => {
+        const doResume = () => {
           player.currentTime = prog.position;
           toast(`Resumed playback at ${formatTime(prog.position)}`, 2500);
-          player.removeEventListener('can-play', onCanPlay);
         };
-        player.addEventListener('can-play', onCanPlay);
+        if (player.canPlay || player.state?.canPlay) {
+          doResume();
+        } else {
+          player.addEventListener('can-play', doResume, { once: true });
+        }
       }
     }).catch(() => {});
-    
-    // Autoplay next episode
+
+    // Autoplay next episode when current finishes
     player.addEventListener('ended', () => {
       saveProgress(player.duration, player.duration, true);
       if (nextEpisode) {
@@ -683,8 +721,8 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
         }, 1200);
       }
     });
-    
-    // Skip Markers
+
+    // AniSkip integration
     let markers = { introStart: null, introEnd: null, creditsStart: null };
     API.getSkipTimes(post.title, parseInt(episode.num, 10) || 1, 1440).then(res => {
       if (res.found && res.results) {
@@ -695,40 +733,42 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
         markers.creditsStart = ed ? ed.start : null;
       }
     }).catch(() => {});
-    
-    const skipBtn = document.getElementById('skipBtn');
+
     let skipAction = null;
-    
-    skipBtn.onclick = () => {
-      if (skipAction === 'intro' && markers.introEnd) {
-        player.currentTime = markers.introEnd + 0.5;
-        skipBtn.style.display = 'none';
-        toast("⚡ Skipped Intro", 1500);
-      } else if (skipAction === 'outro' && player.duration) {
-        player.currentTime = player.duration - 1;
-        skipBtn.style.display = 'none';
-        toast("⚡ Skipped Outro", 1500);
-      }
-    };
-    
-    player.addEventListener('time-update', (e) => {
+    if (skipBtn) {
+      skipBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (skipAction === 'intro' && markers.introEnd) {
+          player.currentTime = markers.introEnd + 0.5;
+          skipBtn.style.display = 'none';
+          toast("⚡ Skipped Intro", 1500);
+        } else if (skipAction === 'outro' && player.duration) {
+          player.currentTime = player.duration - 1;
+          skipBtn.style.display = 'none';
+          toast("⚡ Skipped Outro", 1500);
+        }
+      };
+    }
+
+    player.addEventListener('time-update', () => {
       const t = player.currentTime;
       const dur = player.duration;
       let show = false;
-      
+
       if (markers.introStart !== null && markers.introEnd !== null && t >= markers.introStart && t < markers.introEnd) {
         show = true;
         skipAction = 'intro';
-        skipBtn.textContent = '⚡ Skip Intro';
+        if (skipBtn) skipBtn.textContent = '⚡ Skip Intro';
       } else if (markers.creditsStart !== null && dur > 0 && t >= markers.creditsStart && t < (dur - 5)) {
         show = true;
         skipAction = 'outro';
-        skipBtn.textContent = '⚡ Skip Outro';
+        if (skipBtn) skipBtn.textContent = '⚡ Skip Outro';
       }
-      skipBtn.style.display = show ? 'flex' : 'none';
+      if (skipBtn) skipBtn.style.display = show ? 'flex' : 'none';
     });
 
-    // Custom Keybinds
+    // Custom Keyboard Shortcuts
     window.onkeydown = (e) => {
       if (['input', 'textarea', 'select'].includes(document.activeElement.tagName.toLowerCase())) return;
       if (e.code === 'KeyT') {
@@ -742,7 +782,7 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
         toggleHelpModal();
       }
     };
-    
+
     // Store cleanup data
     window._vidstackCleanup = () => {
       clearInterval(hbTimer);
@@ -750,53 +790,34 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
       window.removeEventListener('pagehide', onUnload);
     };
 
-    // Mobile double tap
-    const wrapper = document.getElementById('videoWrapper');
-    let lastTapTime = 0;
-    let lastTapX = 0;
-    if (wrapper) {
-      wrapper.addEventListener('touchend', (e) => {
-        const now = Date.now();
-        const touch = e.changedTouches[0];
-        if (!touch) return;
-        
-        if (e.target.closest('vds-media') && e.target.closest('vds-media').tagName.toLowerCase().includes('vds-')) {
-          // Inside vidstack element
-        }
-        
-        const rect = wrapper.getBoundingClientRect();
-        const x = touch.clientX - rect.left;
-        const diffTime = now - lastTapTime;
-        const diffX = Math.abs(x - lastTapX);
-
-        if (diffTime < 350 && diffX < 80) {
-          const half = rect.width / 2;
-          if (x < half) {
-            player.currentTime -= 10;
-            showTapRipple('tapLeft');
-          } else {
-            player.currentTime += 10;
-            showTapRipple('tapRight');
-          }
-        }
-        lastTapTime = now;
-        lastTapX = x;
-      });
-    }
-
   } catch (err) {
-    console.error("Vidstack init error", err);
+    console.error("Vidstack init error:", err);
+    toast("Player error: " + err.message, 4000);
   }
 }
 
 function cleanUpPlayer() {
+  const skipBtn = document.getElementById('skipBtn');
+  const videoWrapper = document.getElementById('videoWrapper');
+  if (skipBtn && videoWrapper && skipBtn.parentElement !== videoWrapper) {
+    videoWrapper.appendChild(skipBtn);
+    skipBtn.style.display = 'none';
+  }
   if (window._vidstackPlayer) {
-    window._vidstackPlayer.destroy();
+    try {
+      window._vidstackPlayer.destroy();
+    } catch (e) {}
     window._vidstackPlayer = null;
   }
   if (window._vidstackCleanup) {
-    window._vidstackCleanup();
+    try {
+      window._vidstackCleanup();
+    } catch (e) {}
     window._vidstackCleanup = null;
+  }
+  const target = document.getElementById('vidstackTarget');
+  if (target) {
+    target.innerHTML = '';
   }
   window.onkeydown = null;
 }
@@ -1202,3 +1223,17 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+// Expose functions globally for HTML onclick event handlers
+window.toggleHelpModal = toggleHelpModal;
+window.toggleTheaterMode = toggleTheaterMode;
+window.toast = toast;
+window.viewHome = viewHome;
+window.viewPost = viewPost;
+window.viewWatch = viewWatch;
+window.viewWatchlist = viewWatchlist;
+window.viewBinge = viewBinge;
+window.viewToday = viewToday;
+window.removeCW = removeCW;
+window.cleanUpPlayer = cleanUpPlayer;
+window.initVideoPlayer = initVideoPlayer;
