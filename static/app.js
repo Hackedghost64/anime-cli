@@ -533,7 +533,28 @@ async function viewWatch(pid, epIdPref, srvPref) {
 
     const subs = servers.filter(s => s.lang === 'sub');
     const dubs = servers.filter(s => s.lang === 'dub');
-    let activeLang = srvPref ? (servers.find(s => s.id === srvPref)?.lang || 'sub') : (subs.length ? 'sub' : 'dub');
+
+    // Retrieve saved user audio preference (defaults to 'sub')
+    let savedAudioLang = 'sub';
+    try {
+      savedAudioLang = localStorage.getItem('shinsei_audio_lang') || 'sub';
+    } catch (e) {}
+
+    let activeLang = 'sub';
+    if (srvPref) {
+      const preferredServer = servers.find(s => s.id === srvPref);
+      if (preferredServer && preferredServer.lang) {
+        activeLang = preferredServer.lang;
+      }
+    } else if (savedAudioLang === 'dub' && dubs.length > 0) {
+      activeLang = 'dub';
+    } else if (savedAudioLang === 'sub' && subs.length > 0) {
+      activeLang = 'sub';
+    } else if (dubs.length > 0) {
+      activeLang = 'dub';
+    } else if (subs.length > 0) {
+      activeLang = 'sub';
+    }
 
     const audioGroup = document.getElementById('audioGroup');
     audioGroup.innerHTML = `
@@ -551,6 +572,7 @@ async function viewWatch(pid, epIdPref, srvPref) {
     if (subs.length) {
       document.getElementById('btnLangSub').onclick = () => {
         activeLang = 'sub';
+        try { localStorage.setItem('shinsei_audio_lang', 'sub'); } catch (e) {}
         document.getElementById('btnLangSub').classList.add('active');
         if (dubs.length) document.getElementById('btnLangDub').classList.remove('active');
         updateServerOptions();
@@ -559,6 +581,7 @@ async function viewWatch(pid, epIdPref, srvPref) {
     if (dubs.length) {
       document.getElementById('btnLangDub').onclick = () => {
         activeLang = 'dub';
+        try { localStorage.setItem('shinsei_audio_lang', 'dub'); } catch (e) {}
         document.getElementById('btnLangDub').classList.add('active');
         if (subs.length) document.getElementById('btnLangSub').classList.remove('active');
         updateServerOptions();
