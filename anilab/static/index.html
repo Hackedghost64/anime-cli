@@ -12,8 +12,10 @@
   <link rel="stylesheet" href="/static/style.css">
   <link rel="manifest" href="/static/manifest.json">
   
-  <!-- HLS.js Video Engine -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <!-- Vidstack Player -->
+  <link rel="stylesheet" href="https://cdn.vidstack.io/player/theme.css" />
+  <link rel="stylesheet" href="https://cdn.vidstack.io/player/video.css" />
+  <script src="https://cdn.vidstack.io/player" type="module"></script>
 </head>
 <body>
 
@@ -109,70 +111,11 @@
     </div>
   </div>
 
-  <!-- Player Quick Settings Modal / Bottom Sheet -->
-  <div id="playerSettingsModal" class="modal-backdrop bottom-sheet" style="display:none;" onclick="if(event.target===this) togglePlayerSettingsModal()">
-    <div class="sheet-card">
-      <div class="sheet-drag-handle"></div>
-      <div class="modal-header">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:20px;">⚙️</span>
-          <div>
-            <h3 style="font-size:17px;font-weight:800;color:#fff;">Playback Settings</h3>
-            <p style="font-size:12px;color:var(--text-dim);">Quality, speed & stream preferences</p>
-          </div>
-        </div>
-        <button class="modal-close-btn" onclick="togglePlayerSettingsModal()">✕</button>
-      </div>
-
-      <div class="sheet-body">
-        <!-- Quality selection -->
-        <div class="setting-group">
-          <label class="setting-label">Video Quality</label>
-          <div id="sheetQualityPills" class="sheet-pill-group">
-            <button class="sheet-pill active" data-quality="-1">Auto</button>
-          </div>
-        </div>
-
-        <!-- Speed selection -->
-        <div class="setting-group">
-          <label class="setting-label">Playback Speed</label>
-          <div id="sheetSpeedPills" class="sheet-pill-group">
-            <button class="sheet-pill" data-speed="0.75">0.75x</button>
-            <button class="sheet-pill active" data-speed="1">1.0x</button>
-            <button class="sheet-pill" data-speed="1.25">1.25x</button>
-            <button class="sheet-pill" data-speed="1.5">1.5x</button>
-            <button class="sheet-pill" data-speed="2">2.0x</button>
-          </div>
-        </div>
-
-        <!-- Auto skip switch -->
-        <div class="setting-row">
-          <div>
-            <div style="font-size:14px;font-weight:700;color:#fff;">⚡ Auto-Skip OP & ED</div>
-            <div style="font-size:12px;color:var(--text-dim);">Skip openings & endings automatically</div>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="sheetAutoSkipToggle" checked>
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <!-- Shortcuts Help Quick Link -->
-        <div class="setting-row">
-          <div>
-            <div style="font-size:14px;font-weight:700;color:#fff;">❓ Help & Gestures</div>
-            <div style="font-size:12px;color:var(--text-dim);">Touch gestures and shortcuts guide</div>
-          </div>
-          <button class="btn btn-secondary btn-sm" onclick="togglePlayerSettingsModal(); toggleHelpModal();">View Guide</button>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- Toast Notification Hub -->
   <div id="toast-container"></div>
 
   <!-- App Script -->
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js" type="module"></script>
 </body>
 </html>
