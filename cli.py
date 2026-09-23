@@ -104,17 +104,46 @@ class SleepInhibitor:
         self.reason = reason
         self._proc: Optional[subprocess.Popen] = None
 
+    def build_command(self) -> list[str]:
+        has_systemd = bool(shutil.which("systemd-inhibit"))
+        has_gnome = bool(shutil.which("gnome-session-inhibit"))
+
+        if has_systemd and has_gnome:
+            return [
+                "systemd-inhibit",
+                "--what=sleep:idle:handle-lid-switch",
+                "--who=anime-cli",
+                f"--why={self.reason}",
+                "gnome-session-inhibit",
+                "--inhibit", "suspend:idle",
+                "--app-id", "anime-cli",
+                "--reason", self.reason,
+                "sleep", "infinity"
+            ]
+        elif has_gnome:
+            return [
+                "gnome-session-inhibit",
+                "--inhibit", "suspend:idle",
+                "--app-id", "anime-cli",
+                "--reason", self.reason,
+                "sleep", "infinity"
+            ]
+        elif has_systemd:
+            return [
+                "systemd-inhibit",
+                "--what=sleep:idle:handle-lid-switch",
+                "--who=anime-cli",
+                f"--why={self.reason}",
+                "sleep", "infinity"
+            ]
+        return ["sleep", "infinity"]
+
     def start(self):
-        if shutil.which("systemd-inhibit"):
+        cmd = self.build_command()
+        if len(cmd) > 2:
             try:
                 self._proc = subprocess.Popen(
-                    [
-                        "systemd-inhibit",
-                        "--what=sleep:idle:handle-lid-switch",
-                        "--who=anime-cli",
-                        f"--why={self.reason}",
-                        "sleep", "infinity"
-                    ],
+                    cmd,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL
                 )
@@ -237,6 +266,23 @@ def cmd_browser(port: int = 8000, share: bool = False, open_browser: bool = True
         inhibitor.start()
         print(f"  • {C_BOLD}Power State:{C_RESET} {C_GREEN}☕ Sleep & lid-close suspend inhibited (PC stays awake while streaming){C_RESET}")
 
+    # 1. Start Uvicorn backend in background thread first so port is actively listening
+    import uvicorn
+    from main import app
+    config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning", timeout_keep_alive=75)
+    server = uvicorn.Server(config)
+    server_thread = threading.Thread(target=server.run, daemon=True)
+    server_thread.start()
+
+    # Wait until Uvicorn has bound and is accepting requests
+    probe_start = time.time()
+    while time.time() - probe_start < 5.0:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                break
+        except (OSError, ConnectionRefusedError):
+            time.sleep(0.1)
+
     tunnel_proc = None
     tunnel_url = None
 
@@ -263,12 +309,18 @@ def cmd_browser(port: int = 8000, share: bool = False, open_browser: bool = True
         threading.Timer(1.2, lambda: webbrowser.open(target_url)).start()
 
     try:
-        import uvicorn
-        from main import app
-        uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning", timeout_keep_alive=75)
+        while server_thread.is_alive():
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        server.should_exit = True
     finally:
+        server.should_exit = True
         if tunnel_proc:
-            tunnel_proc.terminate()
+            try:
+                tunnel_proc.terminate()
+                tunnel_proc.wait(timeout=1.0)
+            except Exception:
+                pass
         if inhibitor:
             inhibitor.stop()
 
