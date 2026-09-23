@@ -713,10 +713,11 @@ async def cmd_terminal(
 async def interactive_menu():
     banner()
     menu_options = [
-        "🔍 Search Anime",
+        "🔍 Search & Watch Anime",
         "🎲 Binge Roulette (Quick 3-Question Match)",
         "📅 Today's Airing Radar (Live Release Schedule)",
         "▶ Continue Watching (Resume last episode)",
+        "📥 Download Episode (1080p MP4 via FFmpeg)",
         "🌐 Launch Web Browser",
         "🔗 Share Public Tunnel (QR Code for phone)",
         "❌ Exit"
@@ -738,8 +739,10 @@ async def interactive_menu():
     elif sel == 3:
         await cmd_terminal(continue_last=True)
     elif sel == 4:
-        cmd_browser()
+        await cmd_terminal(download=True)
     elif sel == 5:
+        cmd_browser()
+    elif sel == 6:
         cmd_browser(share=True)
     else:
         print("Goodbye!")
@@ -783,6 +786,12 @@ def main():
     elif args.sub:
         dub_pref = False
 
+    # Handle 'download' or 'dl' command prefix
+    if args.query and (args.query == "download" or args.query.startswith("download ") or args.query == "dl" or args.query.startswith("dl ")):
+        args.download = True
+        parts = args.query.split(maxsplit=1)
+        args.query = parts[1] if len(parts) > 1 else None
+
     # Dispatch based on simple flags
     if args.server or args.query in ("server", "serve", "stream"):
         cmd_stream(port=args.port, keep_awake=args.keep_awake)
@@ -807,6 +816,8 @@ def main():
         asyncio.run(_run_today())
     elif args.continue_last:
         asyncio.run(cmd_terminal(continue_last=True, dub_pref=dub_pref, download=args.download))
+    elif args.download and not args.query:
+        asyncio.run(cmd_terminal(download=True, dub_pref=dub_pref))
     elif args.query:
         asyncio.run(cmd_terminal(query=args.query, dub_pref=dub_pref, download=args.download))
     else:
