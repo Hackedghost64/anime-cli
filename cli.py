@@ -98,6 +98,45 @@ def fzf_select(options: List[str], prompt: str = "Select > ", preview_cmd: Optio
         pass
     return None
 
+class SleepInhibitor:
+    """Inhibits system sleep, idle timeout, and lid-close suspend while server is active."""
+    def __init__(self, reason: str = "Streaming anime to mobile device"):
+        self.reason = reason
+        self._proc: Optional[subprocess.Popen] = None
+
+    def start(self):
+        if shutil.which("systemd-inhibit"):
+            try:
+                self._proc = subprocess.Popen(
+                    [
+                        "systemd-inhibit",
+                        "--what=sleep:idle:handle-lid-switch",
+                        "--who=anime-cli",
+                        f"--why={self.reason}",
+                        "sleep", "infinity"
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+            except Exception:
+                pass
+
+    def stop(self):
+        if self._proc:
+            try:
+                self._proc.terminate()
+                self._proc.wait(timeout=1.0)
+            except Exception:
+                pass
+            self._proc = None
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
+
 def start_cloudflared_tunnel(port: int) -> Optional[tuple[subprocess.Popen, str]]:
     """Starts a cloudflared quick tunnel and extracts the https:// trycloudflare.com URL."""
     cf_bin = shutil.which("cloudflared") or os.path.expanduser("~/.local/bin/cloudflared")
@@ -114,6 +153,8 @@ def start_cloudflared_tunnel(port: int) -> Optional[tuple[subprocess.Popen, str]
     cmd = [
         cf_bin, "tunnel", 
         "--url", f"http://127.0.0.1:{port}", 
+        "--edge-ip-version", "4",
+        "--retries", "10",
         "--logfile", log_path
     ]
     p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -163,17 +204,25 @@ def start_cloudflared_tunnel(port: int) -> Optional[tuple[subprocess.Popen, str]
 # -----------------------------------------------------------------------------
 # COMMAND: stream / server (Headless API server)
 # -----------------------------------------------------------------------------
-def cmd_stream(port: int = 8000, host: str = "0.0.0.0"):
+def cmd_stream(port: int = 8000, host: str = "0.0.0.0", keep_awake: bool = True):
     banner()
     print(f"{C_GREEN}⚡ Running headless anime streaming backend on port {port}...{C_RESET}\n")
-    import uvicorn
-    from main import app
-    uvicorn.run(app, host=host, port=port)
+    inhibitor = SleepInhibitor() if keep_awake else None
+    if inhibitor:
+        inhibitor.start()
+        print(f"  • {C_BOLD}Power State:{C_RESET} {C_GREEN}☕ Sleep & lid-close suspend inhibited (PC stays awake){C_RESET}\n")
+    try:
+        import uvicorn
+        from main import app
+        uvicorn.run(app, host=host, port=port, timeout_keep_alive=75)
+    finally:
+        if inhibitor:
+            inhibitor.stop()
 
 # -----------------------------------------------------------------------------
 # COMMAND: browser (Launches Web UI with optional --share tunnel)
 # -----------------------------------------------------------------------------
-def cmd_browser(port: int = 8000, share: bool = False, open_browser: bool = True):
+def cmd_browser(port: int = 8000, share: bool = False, open_browser: bool = True, keep_awake: bool = True):
     banner()
     local_ip = get_local_ip()
     local_url = f"http://localhost:{port}"
@@ -182,6 +231,11 @@ def cmd_browser(port: int = 8000, share: bool = False, open_browser: bool = True
     print(f"{C_BOLD}🚀 Starting Shinsei Anime Web Server...{C_RESET}")
     print(f"  • {C_BOLD}Local PC:{C_RESET}     {C_CYAN}{local_url}{C_RESET}")
     print(f"  • {C_BOLD}Home Wi-Fi:{C_RESET}   {C_CYAN}{wifi_url}{C_RESET}")
+
+    inhibitor = SleepInhibitor() if keep_awake else None
+    if inhibitor:
+        inhibitor.start()
+        print(f"  • {C_BOLD}Power State:{C_RESET} {C_GREEN}☕ Sleep & lid-close suspend inhibited (PC stays awake while streaming){C_RESET}")
 
     tunnel_proc = None
     tunnel_url = None
@@ -193,7 +247,7 @@ def cmd_browser(port: int = 8000, share: bool = False, open_browser: bool = True
             tunnel_proc, tunnel_url = res
             print(f"\n{C_GREEN}{C_BOLD}✨ PUBLIC SHARE LINK ACTIVE (Stream anywhere):{C_RESET}")
             print(f"  {C_BOLD}{C_ORANGE_BG} {tunnel_url} {C_RESET}\n")
-            print(f"{C_DIM}Scan QR code with phone camera to stream on mobile data:{C_RESET}")
+            print(f"{C_DIM}Scan QR code with phone camera to stream on mobile data or Wi-Fi:{C_RESET}")
             print_qr_code(tunnel_url)
         else:
             print(f"{C_RED}Could not establish tunnel. Accessible over Wi-Fi only.{C_RESET}")
@@ -211,10 +265,12 @@ def cmd_browser(port: int = 8000, share: bool = False, open_browser: bool = True
     try:
         import uvicorn
         from main import app
-        uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
+        uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning", timeout_keep_alive=75)
     finally:
         if tunnel_proc:
             tunnel_proc.terminate()
+        if inhibitor:
+            inhibitor.stop()
 
 # -----------------------------------------------------------------------------
 # COMMAND: terminal player (The 10x better ani-cli)
@@ -636,6 +692,8 @@ def main():
     parser.add_argument("-o", "--download", action="store_true", help="Download episode in 1080p MP4 via FFmpeg")
     parser.add_argument("-p", "--port", type=int, default=8000, help="Server port (default: 8000)")
     parser.add_argument("--server", action="store_true", help="Run headless background streaming server")
+    parser.add_argument("--no-sleep", "--keep-awake", dest="keep_awake", action="store_true", default=True, help="Prevent PC from sleeping or suspending while server is running (default: enabled)")
+    parser.add_argument("--allow-sleep", dest="keep_awake", action="store_false", help="Allow PC to enter sleep/suspend while server is running")
 
     args, unknown = parser.parse_known_args()
 
@@ -651,11 +709,11 @@ def main():
 
     # Dispatch based on simple flags
     if args.server or args.query in ("server", "serve", "stream"):
-        cmd_stream(port=args.port)
+        cmd_stream(port=args.port, keep_awake=args.keep_awake)
     elif args.share or (args.query == "share"):
-        cmd_browser(port=args.port, share=True)
+        cmd_browser(port=args.port, share=True, keep_awake=args.keep_awake)
     elif args.browser or (args.query == "browser"):
-        cmd_browser(port=args.port, share=args.share)
+        cmd_browser(port=args.port, share=args.share, keep_awake=args.keep_awake)
     elif args.continue_last:
         asyncio.run(cmd_terminal(continue_last=True, dub_pref=dub_pref, download=args.download))
     elif args.query:
