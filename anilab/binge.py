@@ -62,6 +62,14 @@ VIBE_CATEGORIES: Dict[str, Dict[str, Any]] = {
         "description": "Deep character bonds, tearjerkers, bittersweet profound drama",
         "genres": ["Drama", "Romance"],
         "min_score": 78
+    },
+    "junk": {
+        "key": "junk",
+        "name": "🍿 Pure Junk Food (OP MC & Isekai Flexes)",
+        "description": "Secret god-mode MC, cheat magic flexes, instant dopamine, zero braincells",
+        "genres": ["Fantasy", "Action"],
+        "tags": ["Isekai", "Reincarnation"],
+        "min_score": 65
     }
 }
 
@@ -90,6 +98,7 @@ def build_anilist_binge_query(
       $page: Int,
       $perPage: Int,
       $genre_in: [String],
+      $tag_in: [String],
       $averageScore_greater: Int,
       $episodes_lesser: Int,
       $episodes_greater: Int,
@@ -100,6 +109,7 @@ def build_anilist_binge_query(
         media(
           type: ANIME,
           genre_in: $genre_in,
+          tag_in: $tag_in,
           averageScore_greater: $averageScore_greater,
           episodes_lesser: $episodes_lesser,
           episodes_greater: $episodes_greater,
@@ -134,6 +144,9 @@ def build_anilist_binge_query(
         "averageScore_greater": vibe_cfg["min_score"],
         "sort": ["SCORE_DESC"]
     }
+
+    if vibe_cfg.get("tags"):
+        variables["tag_in"] = vibe_cfg["tags"]
 
     if length_mode == "short":
         variables["episodes_lesser"] = 14
