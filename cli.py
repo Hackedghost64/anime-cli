@@ -331,7 +331,8 @@ async def cmd_terminal(
     query: Optional[str] = None, 
     dub_pref: Optional[bool] = None, 
     continue_last: bool = False, 
-    download: bool = False
+    download: bool = False,
+    ep_num: Optional[int] = None
 ):
     anilab = AnilabClient()
     kyoto = KyotoResolver()
@@ -445,9 +446,17 @@ async def cmd_terminal(
                     tag = f" [{int(pos//60):02d}:{int(pos%60):02d}]"
             ep_options.append(f"#{num} - {name}{tag}")
 
-        ep_idx = fzf_select(ep_options, prompt=f"Select Episode (1-{len(episodes)}) > ")
-        if ep_idx is None:
-            return
+        if ep_num is not None:
+            match_idx = None
+            for idx, e in enumerate(episodes):
+                if str(e.get("num")) == str(ep_num):
+                    match_idx = idx
+                    break
+            ep_idx = match_idx if match_idx is not None else 0
+        else:
+            ep_idx = fzf_select(ep_options, prompt=f"Select Episode (1-{len(episodes)}) > ")
+            if ep_idx is None:
+                return
 
         cur_idx = ep_idx
         episode = episodes[cur_idx]
@@ -705,6 +714,8 @@ async def interactive_menu():
     banner()
     menu_options = [
         "🔍 Search Anime",
+        "🎲 Binge Roulette (Quick 3-Question Match)",
+        "📅 Today's Airing Radar (Live Release Schedule)",
         "▶ Continue Watching (Resume last episode)",
         "🌐 Launch Web Browser",
         "🔗 Share Public Tunnel (QR Code for phone)",
@@ -714,10 +725,21 @@ async def interactive_menu():
     if sel == 0:
         await cmd_terminal()
     elif sel == 1:
-        await cmd_terminal(continue_last=True)
+        from anilab.binge import run_binge_match
+        title = await run_binge_match()
+        if title:
+            await cmd_terminal(query=title, ep_num=1)
     elif sel == 2:
-        cmd_browser()
+        from anilab.schedule import run_schedule_radar
+        res = await run_schedule_radar()
+        if res:
+            title, ep = res
+            await cmd_terminal(query=title, ep_num=ep)
     elif sel == 3:
+        await cmd_terminal(continue_last=True)
+    elif sel == 4:
+        cmd_browser()
+    elif sel == 5:
         cmd_browser(share=True)
     else:
         print("Goodbye!")
@@ -739,6 +761,8 @@ def main():
     parser.add_argument("-b", "--browser", action="store_true", help="Launch web browser app")
     parser.add_argument("-s", "--share", action="store_true", help="Generate public HTTPS tunnel & QR code for phone")
     parser.add_argument("-c", "--continue", dest="continue_last", action="store_true", help="Resume last watched anime episode")
+    parser.add_argument("-B", "--binge", action="store_true", help="Launch interactive 3-question Binge Roulette")
+    parser.add_argument("--today", "--schedule", dest="today", action="store_true", help="View today's live anime release radar")
     parser.add_argument("-d", "--dub", action="store_true", help="Prefer English Dub audio")
     parser.add_argument("--sub", action="store_true", help="Prefer Japanese Sub audio")
     parser.add_argument("-o", "--download", action="store_true", help="Download episode in 1080p MP4 via FFmpeg")
@@ -766,6 +790,21 @@ def main():
         cmd_browser(port=args.port, share=True, keep_awake=args.keep_awake)
     elif args.browser or (args.query == "browser"):
         cmd_browser(port=args.port, share=args.share, keep_awake=args.keep_awake)
+    elif args.binge or (args.query == "binge"):
+        from anilab.binge import run_binge_match
+        async def _run_binge():
+            title = await run_binge_match(dub_pref=dub_pref)
+            if title:
+                await cmd_terminal(query=title, dub_pref=dub_pref, download=args.download, ep_num=1)
+        asyncio.run(_run_binge())
+    elif args.today or (args.query in ("today", "schedule")):
+        from anilab.schedule import run_schedule_radar
+        async def _run_today():
+            res = await run_schedule_radar(dub_pref=dub_pref)
+            if res:
+                title, ep = res
+                await cmd_terminal(query=title, dub_pref=dub_pref, download=args.download, ep_num=ep)
+        asyncio.run(_run_today())
     elif args.continue_last:
         asyncio.run(cmd_terminal(continue_last=True, dub_pref=dub_pref, download=args.download))
     elif args.query:
