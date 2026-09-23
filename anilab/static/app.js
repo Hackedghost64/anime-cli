@@ -464,6 +464,13 @@ async function viewWatch(pid, epIdPref, srvPref) {
         <div class="player-stage">
           <div class="video-wrapper" id="videoWrapper">
             <div id="vidstackTarget"></div>
+            <button id="centerPlayBtn" class="center-play-btn" aria-label="Toggle Play/Pause">
+              <span class="icon-play">▶</span>
+              <span class="icon-pause" style="display:none;">❚❚</span>
+            </button>
+            <button id="playerNextEpBtn" class="player-next-ep-btn" style="display:none;" title="Next Episode (N)">
+              <span>Next Episode</span> ⏭
+            </button>
             <button id="skipBtn" class="skip-button">⚡ Skip Intro</button>
             <div id="playerLoader" class="player-loader" style="display:none;">
               <div class="spinner"></div>
@@ -643,11 +650,112 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
     });
     window._vidstackPlayer = player;
 
-    // Attach skip button into player so it remains accessible in fullscreen!
+    // Attach overlays into player so they remain accessible in fullscreen!
+    const centerPlayBtn = document.getElementById('centerPlayBtn');
+    const playerNextEpBtn = document.getElementById('playerNextEpBtn');
     const skipBtn = document.getElementById('skipBtn');
-    if (skipBtn && player) {
-      player.appendChild(skipBtn);
+
+    if (centerPlayBtn && player) player.appendChild(centerPlayBtn);
+    if (playerNextEpBtn && player) player.appendChild(playerNextEpBtn);
+    if (skipBtn && player) player.appendChild(skipBtn);
+
+    // Center Play / Pause Button logic
+    if (centerPlayBtn) {
+      centerPlayBtn.style.display = 'flex';
+      const iconPlay = centerPlayBtn.querySelector('.icon-play');
+      const iconPause = centerPlayBtn.querySelector('.icon-pause');
+
+      const updateCenterBtn = () => {
+        const isPaused = player.paused;
+        if (iconPlay) iconPlay.style.display = isPaused ? 'block' : 'none';
+        if (iconPause) iconPause.style.display = isPaused ? 'none' : 'block';
+      };
+
+      player.addEventListener('play', updateCenterBtn);
+      player.addEventListener('pause', updateCenterBtn);
+      updateCenterBtn();
+
+      centerPlayBtn.onclick = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (player.paused) {
+          player.play().catch(() => {});
+        } else {
+          player.pause().catch(() => {});
+        }
+        updateCenterBtn();
+      };
+
+      // Prevent taps/clicks on center button from triggering gestures or double-click zoom
+      centerPlayBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+      centerPlayBtn.addEventListener('dblpointerup', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+      });
+      centerPlayBtn.ondblclick = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+      };
     }
+
+    // In-Player Next Episode Button logic
+    if (playerNextEpBtn) {
+      if (nextEpisode) {
+        playerNextEpBtn.style.display = 'flex';
+        playerNextEpBtn.title = `Next Episode (#${nextEpisode.num}) [N]`;
+        playerNextEpBtn.onclick = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          location.hash = `#/watch/${post.id}?ep=${nextEpisode.id}`;
+        };
+      } else {
+        playerNextEpBtn.style.display = 'none';
+      }
+    }
+
+    // Add Next Episode button to bottom controls bar as well
+    const addControlsNextBtn = () => {
+      if (!nextEpisode) return;
+      const controlsGroup = player.querySelector('.vds-controls-group');
+      if (controlsGroup && !controlsGroup.querySelector('.vds-custom-next-btn')) {
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'vds-button vds-custom-next-btn';
+        nextBtn.setAttribute('aria-label', `Next Episode (#${nextEpisode.num})`);
+        nextBtn.title = `Next Episode (#${nextEpisode.num}) [N]`;
+        nextBtn.innerHTML = `<span style="font-size:16px;line-height:1;">⏭</span>`;
+        nextBtn.onclick = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          location.hash = `#/watch/${post.id}?ep=${nextEpisode.id}`;
+        };
+        const playBtn = controlsGroup.querySelector('.vds-play-button');
+        if (playBtn && playBtn.nextSibling) {
+          controlsGroup.insertBefore(nextBtn, playBtn.nextSibling);
+        } else {
+          controlsGroup.appendChild(nextBtn);
+        }
+      }
+    };
+    addControlsNextBtn();
+
+    // Prevent double-tapping in the middle from minimizing or toggling fullscreen
+    player.addEventListener('will-trigger', (e) => {
+      if (typeof e.detail === 'string' && e.detail.includes('fullscreen')) {
+        e.preventDefault();
+      }
+    });
+
+    const disableFullscreenGestures = () => {
+      player.querySelectorAll('media-gesture[action*="fullscreen"]').forEach(g => g.remove());
+    };
+    disableFullscreenGestures();
+
+    const gestureObserver = new MutationObserver(() => {
+      disableFullscreenGestures();
+      addControlsNextBtn();
+    });
+    gestureObserver.observe(player, { childList: true, subtree: true });
+    window._vidstackObserver = gestureObserver;
 
     // Heartbeat: save progress every 10s during active playback
     let lastHeartbeat = 0;
@@ -797,12 +905,18 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
 }
 
 function cleanUpPlayer() {
-  const skipBtn = document.getElementById('skipBtn');
-  const videoWrapper = document.getElementById('videoWrapper');
-  if (skipBtn && videoWrapper && skipBtn.parentElement !== videoWrapper) {
-    videoWrapper.appendChild(skipBtn);
-    skipBtn.style.display = 'none';
+  if (window._vidstackObserver) {
+    try { window._vidstackObserver.disconnect(); } catch (e) {}
+    window._vidstackObserver = null;
   }
+  const videoWrapper = document.getElementById('videoWrapper');
+  ['centerPlayBtn', 'playerNextEpBtn', 'skipBtn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && videoWrapper && el.parentElement !== videoWrapper) {
+      videoWrapper.appendChild(el);
+      el.style.display = 'none';
+    }
+  });
   if (window._vidstackPlayer) {
     try {
       window._vidstackPlayer.destroy();
