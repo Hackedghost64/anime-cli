@@ -651,6 +651,58 @@ function toggleHelpModal() {
   m.style.display = (m.style.display === 'none' || !m.style.display) ? 'flex' : 'none';
 }
 
+function togglePlayerSettingsModal() {
+  const m = document.getElementById('playerSettingsModal');
+  if (!m) return;
+  const isOpening = (m.style.display === 'none' || !m.style.display);
+  m.style.display = isOpening ? 'flex' : 'none';
+  if (isOpening) {
+    syncPlayerSettingsSheet();
+  }
+}
+
+function syncPlayerSettingsSheet() {
+  // Sync quality pills
+  const qContainer = document.getElementById('sheetQualityPills');
+  if (qContainer) {
+    const n = mediaContext.state.network;
+    const curQ = n.currentQualityIndex;
+    let html = `<button class="sheet-pill ${curQ === -1 ? 'active' : ''}" data-quality="-1" onclick="mediaContext.setQuality(-1); syncPlayerSettingsSheet();">Auto</button>`;
+    if (n.qualityLevels && n.qualityLevels.length > 0) {
+      html += n.qualityLevels.map(lvl => `
+        <button class="sheet-pill ${curQ === lvl.index ? 'active' : ''}" data-quality="${lvl.index}" onclick="mediaContext.setQuality(${lvl.index}); syncPlayerSettingsSheet();">
+          ${lvl.label}
+        </button>
+      `).join('');
+    }
+    qContainer.innerHTML = html;
+  }
+
+  // Sync speed pills
+  const speedContainer = document.getElementById('sheetSpeedPills');
+  if (speedContainer) {
+    const curSpeed = mediaContext.state.playback.playbackRate;
+    const pills = speedContainer.querySelectorAll('.sheet-pill');
+    pills.forEach(pill => {
+      const spd = parseFloat(pill.dataset.speed);
+      pill.classList.toggle('active', Math.abs(spd - curSpeed) < 0.05);
+      pill.onclick = () => {
+        mediaContext.setPlaybackRate(spd);
+        syncPlayerSettingsSheet();
+      };
+    });
+  }
+
+  // Sync auto-skip switch
+  const autoSkipSw = document.getElementById('sheetAutoSkipToggle');
+  if (autoSkipSw) {
+    autoSkipSw.checked = mediaContext.state.markers.autoSkipEnabled;
+    autoSkipSw.onchange = () => {
+      mediaContext.toggleAutoSkip(autoSkipSw.checked);
+    };
+  }
+}
+
 function toggleTheaterMode() {
   const c = document.querySelector('.watch-container');
   if (c) c.classList.toggle('theater-mode');
@@ -1085,11 +1137,8 @@ async function viewWatch(pid, epIdPref, srvPref) {
     }
 
     render(`
-      <div style="margin-bottom:14px;">
-        <a href="#/post/${pid}" style="color:var(--text-dim);font-weight:600;">← Back to ${esc(post.title)}</a>
-        <h2 style="font-size:22px;font-weight:800;margin-top:6px;">
-          ${esc(post.title)} · <span style="color:var(--accent-orange)">Ep ${curEp.num || '?'}</span>
-        </h2>
+      <div style="margin-bottom:12px;">
+        <a href="#/post/${pid}" style="color:var(--text-dim);font-weight:600;font-size:13px;">← Back to ${esc(post.title)}</a>
       </div>
 
       <div class="watch-container">
@@ -1114,20 +1163,24 @@ async function viewWatch(pid, epIdPref, srvPref) {
             <div id="playerOverlay" class="player-overlay">
               <div class="overlay-top">
                 <div class="player-title-info">
-                  ${esc(post.title)} · Ep ${curEp.num || '?'} ${curEp.name ? '— ' + esc(curEp.name) : ''}
+                  ${esc(post.title)} · Ep ${curEp.num || '?'}
                 </div>
-                <div style="display:flex;align-items:center;gap:10px;">
-                  <label class="auto-skip-toggle" title="Auto-skip Openings & Endings">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <label class="auto-skip-toggle desktop-only" title="Auto-skip Openings & Endings">
                     <input type="checkbox" id="autoSkipToggle" checked>
                     <span>⚡ Auto-Skip</span>
                   </label>
-                  <button class="ctrl-btn" onclick="toggleTheaterMode()" title="Theater Mode (T)">🗔</button>
-                  <button class="ctrl-btn" onclick="toggleHelpModal()" title="Shortcuts (?)">❓</button>
+                  <button class="ctrl-btn desktop-only" onclick="toggleTheaterMode()" title="Theater Mode (T)">🗔</button>
+                  <button class="ctrl-btn" onclick="togglePlayerSettingsModal()" title="Playback Settings">⚙️</button>
+                  <button class="ctrl-btn desktop-only" onclick="toggleHelpModal()" title="Shortcuts (?)">❓</button>
                 </div>
               </div>
 
-              <div id="centerPlayIcon" style="align-self:center;font-size:44px;color:#fff;text-shadow:0 4px 16px rgba(0,0,0,0.8);cursor:pointer;opacity:0.9;" onclick="mediaContext.togglePlay()">
-                ▶
+              <!-- Center 3-Button Touch Row (Netflix/Crunchyroll Mobile Style) -->
+              <div class="overlay-center">
+                <button class="touch-seek-btn" onclick="mediaContext.seekRelative(-10)" title="Rewind 10s">↺ 10</button>
+                <button id="centerPlayIcon" class="touch-play-btn" onclick="mediaContext.togglePlay()" title="Play/Pause">▶</button>
+                <button class="touch-seek-btn" onclick="mediaContext.seekRelative(10)" title="Forward 10s">↻ 10</button>
               </div>
 
               <div class="overlay-bottom">
@@ -1143,24 +1196,25 @@ async function viewWatch(pid, epIdPref, srvPref) {
 
                 <div class="controls-row">
                   <div class="controls-left">
-                    <button id="ctrlPlayBtn" class="ctrl-btn" onclick="mediaContext.togglePlay()" title="Play/Pause (Space)">▶</button>
-                    <button class="ctrl-btn" onclick="mediaContext.seekRelative(-10)" title="Rewind 10s (← / J)">↺10</button>
-                    <button class="ctrl-btn" onclick="mediaContext.seekRelative(10)" title="Forward 10s (→ / L)">↻10</button>
+                    <button id="ctrlPlayBtn" class="ctrl-btn desktop-only" onclick="mediaContext.togglePlay()" title="Play/Pause (Space)">▶</button>
+                    <button class="ctrl-btn desktop-only" onclick="mediaContext.seekRelative(-10)" title="Rewind 10s (← / J)">↺10</button>
+                    <button class="ctrl-btn desktop-only" onclick="mediaContext.seekRelative(10)" title="Forward 10s (→ / L)">↻10</button>
                     <span id="timeDisplay" class="time-display">00:00 / 00:00</span>
                   </div>
 
                   <div class="controls-right">
-                    <select id="speedSelect" class="ctrl-select" title="Playback Speed">
+                    <select id="speedSelect" class="ctrl-select desktop-only" title="Playback Speed">
                       <option value="0.75">0.75x</option>
                       <option value="1" selected>1.0x</option>
                       <option value="1.25">1.25x</option>
                       <option value="1.5">1.5x</option>
                       <option value="2">2.0x</option>
                     </select>
-                    <select id="qualitySelect" class="ctrl-select" title="Video Quality">
+                    <select id="qualitySelect" class="ctrl-select desktop-only" title="Video Quality">
                       <option value="-1">Auto</option>
                     </select>
-                    <button id="pipBtn" class="ctrl-btn" title="Picture in Picture (P)">⧉</button>
+                    <button class="ctrl-btn mobile-only" onclick="togglePlayerSettingsModal()" title="Playback Settings">⚙️</button>
+                    <button id="pipBtn" class="ctrl-btn desktop-only" title="Picture in Picture (P)">⧉</button>
                     <button id="fullscreenBtn" class="ctrl-btn" title="Fullscreen (F)">⛶</button>
                   </div>
                 </div>
@@ -1176,22 +1230,31 @@ async function viewWatch(pid, epIdPref, srvPref) {
             </button>
           </div>
 
+          <!-- Watch Info & Mobile Action Bar -->
+          <div class="watch-info-bar">
+            <h1 class="watch-anime-title">${esc(post.title)}</h1>
+            <div class="watch-episode-subtitle">
+              <span class="ep-badge">EP ${curEp.num || '?'}</span>
+              <span class="ep-name-text">${esc(curEp.name || 'Episode ' + curEp.num)}</span>
+            </div>
+          </div>
+
           <div class="player-toolbar">
-            <div class="toolbar-group">
-              <span style="font-size:13px;font-weight:700;color:var(--text-dim);">AUDIO:</span>
+            <div class="toolbar-group audio-select-group">
+              <span style="font-size:12px;font-weight:700;color:var(--text-dim);">AUDIO:</span>
               <div id="audioGroup" style="display:flex;gap:6px;"></div>
             </div>
 
-            <div class="toolbar-group">
-              <span style="font-size:13px;font-weight:700;color:var(--text-dim);">SERVER:</span>
-              <select id="serverSelect" style="background:var(--border-line);border:none;padding:6px 12px;border-radius:var(--radius-sm);color:#fff;font-size:13px;outline:none;cursor:pointer;">
+            <div class="toolbar-group server-select-group">
+              <span style="font-size:12px;font-weight:700;color:var(--text-dim);">SERVER:</span>
+              <select id="serverSelect" class="server-dropdown">
                 <option>Loading...</option>
               </select>
             </div>
 
-            <div class="toolbar-group" style="margin-left:auto;">
-              <button id="btnPrevEp" class="btn btn-secondary btn-sm">⏮ Prev</button>
-              <button id="btnNextEp" class="btn btn-primary btn-sm">Next ⏭</button>
+            <div class="toolbar-group nav-ep-group">
+              <button id="btnPrevEp" class="btn btn-secondary btn-sm ep-nav-btn">⏮ Prev</button>
+              <button id="btnNextEp" class="btn btn-primary btn-sm ep-nav-btn">Next ⏭</button>
             </div>
           </div>
         </div>
@@ -1408,8 +1471,7 @@ function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
       ctrlPlay.textContent = p.playing ? '⏸' : '▶';
     }
     if (centerPlay) {
-      centerPlay.textContent = '▶';
-      centerPlay.style.display = p.playing ? 'none' : 'block';
+      centerPlay.textContent = p.playing ? '⏸' : '▶';
     }
     if (overlay) {
       overlay.classList.toggle('paused', !p.playing);
@@ -1465,6 +1527,9 @@ function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
         qualitySelect.value = currentVal;
       }
     }
+
+    // Sync mobile bottom sheet if open
+    syncPlayerSettingsSheet();
   });
 
   // Auto-skip toggle switch
@@ -1533,7 +1598,12 @@ function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
 
     // Direct video-stage click to play/pause (Netflix / Crunchyroll behavior)
     wrapper.onclick = (e) => {
-      if (e.target.closest('.controls-row') || e.target.closest('.overlay-top') || e.target.closest('.scrubber-container') || e.target.closest('.skip-button') || e.target.closest('.btn-pill') || e.target.closest('select')) {
+      if (e.target.closest('.controls-row') || e.target.closest('.overlay-top') || e.target.closest('.overlay-center') || e.target.closest('.scrubber-container') || e.target.closest('.skip-button') || e.target.closest('.btn-pill') || e.target.closest('select')) {
+        return;
+      }
+      // If overlay is currently hidden while playing, tap reveals overlay first
+      if (overlay && !overlay.classList.contains('visible') && mediaContext.state.playback.playing) {
+        resetOverlayTimer();
         return;
       }
       mediaContext.togglePlay();
@@ -1604,6 +1674,31 @@ function initVideoPlayer(streamUrl, post, episode, nextEpisode) {
     });
 
     window.addEventListener('mouseup', () => {
+      scrubberDragActive = false;
+    });
+
+    // Touch scrubbing ergonomics for mobile
+    function handleTouchScrub(e) {
+      if (!e.touches || !e.touches[0]) return;
+      e.preventDefault();
+      seekToScrubberClientX(e.touches[0].clientX);
+    }
+
+    scrubber.addEventListener('touchstart', (e) => {
+      scrubberDragActive = true;
+      handleTouchScrub(e);
+    }, { passive: false });
+
+    window.addEventListener('touchmove', (e) => {
+      if (scrubberDragActive) {
+        handleTouchScrub(e);
+      }
+    }, { passive: false });
+
+    window.addEventListener('touchend', () => {
+      scrubberDragActive = false;
+    });
+    window.addEventListener('touchcancel', () => {
       scrubberDragActive = false;
     });
   }

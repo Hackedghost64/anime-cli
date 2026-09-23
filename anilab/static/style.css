@@ -866,6 +866,13 @@ video#animePlayer {
 }
 
 @media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+  .mobile-only {
+    display: flex !important;
+  }
+
   .mobile-nav {
     display: flex;
   }
@@ -885,7 +892,7 @@ video#animePlayer {
     margin-top: 6px;
   }
   main#content {
-    padding: 12px;
+    padding: 10px;
   }
   .hero-banner {
     min-height: 280px;
@@ -907,6 +914,130 @@ video#animePlayer {
   }
   .watch-container {
     grid-template-columns: 1fr;
+    gap: 16px;
+    margin-top: 4px;
+  }
+
+  /* Video Stage & Overlays on Mobile */
+  .player-overlay {
+    padding: 10px 12px;
+  }
+  .overlay-top {
+    gap: 8px;
+  }
+  .player-title-info {
+    font-size: 13px;
+    max-width: calc(100% - 70px);
+  }
+  .overlay-center {
+    gap: 22px;
+  }
+  .touch-seek-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 11px;
+  }
+  .touch-play-btn {
+    width: 50px;
+    height: 50px;
+    font-size: 20px;
+  }
+
+  /* Compact Skip Button on Mobile (docked right above scrubber) */
+  .skip-button {
+    bottom: 44px;
+    right: 10px;
+    padding: 6px 13px;
+    font-size: 12px;
+    font-weight: 800;
+    gap: 5px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.8);
+  }
+
+  /* Controls Row: Time on left, Settings + Fullscreen on right */
+  .controls-row {
+    gap: 6px;
+  }
+  .controls-left {
+    gap: 4px;
+  }
+  .controls-right {
+    gap: 6px;
+  }
+  .time-display {
+    font-size: 11px;
+    min-width: 75px;
+    letter-spacing: 0.2px;
+  }
+  .ctrl-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  /* Watch Info & Actions Bar Below Video */
+  .watch-info-bar {
+    padding: 6px 2px 2px;
+    gap: 4px;
+  }
+  .watch-anime-title {
+    font-size: 17px;
+  }
+  .watch-episode-subtitle {
+    font-size: 12.5px;
+  }
+
+  /* Responsive Player Toolbar (Audio, Server, Prev/Next) */
+  .player-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    gap: 10px;
+  }
+  .audio-select-group {
+    order: 1;
+  }
+  .server-select-group {
+    order: 2;
+    margin-left: auto;
+  }
+  .server-dropdown {
+    background: var(--bg-main) !important;
+    border: 1px solid var(--border-line) !important;
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+    border-radius: var(--radius-sm);
+    color: #fff;
+  }
+  .nav-ep-group {
+    order: 3;
+    width: 100%;
+    margin-top: 2px;
+    display: flex;
+    gap: 8px;
+  }
+  .ep-nav-btn {
+    flex: 1;
+    justify-content: center;
+    padding: 9px 12px !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    border-radius: var(--radius-md) !important;
+  }
+
+  /* Episodes Section Rail / Card list */
+  .watch-sidebar {
+    max-height: 420px;
+  }
+  .sidebar-header {
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+  .sidebar-item {
+    padding: 8px 12px;
+    font-size: 13px;
   }
 }
 
@@ -1041,6 +1172,70 @@ video#animePlayer {
   animation: fadeIn 0.2s ease;
 }
 
+/* Center 3-Button Touch Row (Netflix / Crunchyroll mobile style) */
+.overlay-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  pointer-events: none;
+}
+.player-overlay.visible .overlay-center,
+.player-overlay.paused .overlay-center,
+.video-wrapper:hover .overlay-center {
+  pointer-events: auto;
+}
+.touch-seek-btn {
+  background: rgba(19, 22, 34, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+}
+.touch-seek-btn:hover {
+  background: rgba(255, 100, 10, 0.25);
+  border-color: var(--accent-orange);
+  transform: scale(1.06);
+}
+.touch-seek-btn:active {
+  transform: scale(0.92);
+}
+.touch-play-btn {
+  background: rgba(19, 22, 34, 0.85);
+  backdrop-filter: blur(10px);
+  border: 2px solid var(--accent-orange);
+  color: #fff;
+  font-size: 24px;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7), 0 0 16px rgba(255, 100, 10, 0.35);
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+}
+.touch-play-btn:hover {
+  background: var(--accent-orange);
+  transform: scale(1.08);
+}
+.touch-play-btn:active {
+  transform: scale(0.92);
+}
+
 .overlay-top {
   display: flex;
   align-items: center;
@@ -1058,26 +1253,37 @@ video#animePlayer {
   white-space: nowrap;
 }
 
-/* Scrubber Progress Bar */
+/* Utility display classes */
+.desktop-only {
+  display: flex !important;
+}
+.mobile-only {
+  display: none !important;
+}
+
+/* Scrubber Progress Bar - Generous touch hit area */
 .scrubber-container {
   width: 100%;
-  height: 16px;
+  height: 32px;
   display: flex;
   align-items: center;
   cursor: pointer;
   position: relative;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .scrubber-track {
   width: 100%;
-  height: 5px;
+  height: 4px;
   background: rgba(255, 255, 255, 0.25);
   border-radius: 4px;
   position: relative;
   overflow: visible;
   transition: height 0.15s ease;
 }
-.scrubber-container:hover .scrubber-track {
-  height: 8px;
+.scrubber-container:hover .scrubber-track,
+.scrubber-container:active .scrubber-track {
+  height: 6px;
 }
 .scrubber-buffer {
   position: absolute;
@@ -1102,21 +1308,22 @@ video#animePlayer {
   position: absolute;
   top: 50%;
   right: -6px;
-  transform: translateY(-50%) scale(0);
+  transform: translateY(-50%) scale(0.7);
   width: 14px;
   height: 14px;
   background: #fff;
   border-radius: 50%;
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
   transition: transform 0.15s ease;
 }
-.scrubber-container:hover .scrubber-thumb {
-  transform: translateY(-50%) scale(1);
+.scrubber-container:hover .scrubber-thumb,
+.scrubber-container:active .scrubber-thumb {
+  transform: translateY(-50%) scale(1.15);
 }
 
 .time-tooltip {
   position: absolute;
-  bottom: 22px;
+  bottom: 30px;
   transform: translateX(-50%);
   background: rgba(19, 22, 34, 0.95);
   border: 1px solid var(--border-line);
@@ -1128,13 +1335,14 @@ video#animePlayer {
   pointer-events: none;
   display: none;
   box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  z-index: 20;
 }
 
 /* Bottom Controls Row */
 .overlay-bottom {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   pointer-events: none;
 }
 .scrubber-container, .controls-row {
@@ -1170,6 +1378,9 @@ video#animePlayer {
   background: rgba(255, 255, 255, 0.2);
   color: var(--accent-orange);
   transform: scale(1.08);
+}
+.ctrl-btn:active {
+  transform: scale(0.95);
 }
 .time-display {
   font-size: 13px;
@@ -1213,6 +1424,167 @@ video#animePlayer {
 }
 .auto-skip-toggle:hover {
   background: rgba(255, 100, 10, 0.3);
+}
+
+/* Watch Info Header (Title & Subtitle directly below video) */
+.watch-info-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 2px;
+}
+.watch-anime-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.25;
+  margin: 0;
+}
+.watch-episode-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--text-dim);
+}
+.ep-badge {
+  background: rgba(255, 100, 10, 0.15);
+  border: 1px solid rgba(255, 100, 10, 0.4);
+  color: var(--accent-orange);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+.ep-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Bottom Sheet Modal on Mobile */
+.modal-backdrop.bottom-sheet {
+  align-items: flex-end;
+  padding: 0;
+}
+.modal-backdrop.bottom-sheet .sheet-card {
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-line);
+  border-left: 1px solid var(--border-line);
+  border-right: 1px solid var(--border-line);
+  border-bottom: none;
+  border-radius: 20px 20px 0 0;
+  max-width: 600px;
+  width: 100%;
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+  box-shadow: 0 -10px 40px rgba(0,0,0,0.9);
+  animation: slideSheetUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes slideSheetUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.sheet-drag-handle {
+  width: 42px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  margin: 10px auto 4px;
+}
+.sheet-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.setting-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.sheet-pill-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sheet-pill {
+  padding: 8px 15px;
+  border-radius: var(--radius-full);
+  background: var(--bg-main);
+  border: 1px solid var(--border-line);
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.sheet-pill:hover, .sheet-pill:active {
+  border-color: var(--accent-orange);
+  color: #fff;
+}
+.sheet-pill.active {
+  background: var(--accent-orange);
+  border-color: var(--accent-orange);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(255, 100, 10, 0.4);
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* iOS-style toggle switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 26px;
+  flex-shrink: 0;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #272c3d;
+  transition: .25s;
+  border-radius: 34px;
+  border: 1px solid var(--border-line);
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .25s;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+}
+input:checked + .slider {
+  background-color: var(--accent-orange);
+  border-color: var(--accent-orange);
+}
+input:checked + .slider:before {
+  transform: translateX(22px);
 }
 
 /* Double-Tap Mobile Ripples */
