@@ -151,6 +151,23 @@ Choose an action >
 * **Mobile Gestures:** Double-tap left/right edges to seek $\pm 10$s with ripple animations. Accidental double-taps in the middle are safely guarded against unwanted full-screen or minimize toggles.
 * **PiP & Theater Mode:** Full Picture-in-Picture (`P`), Theater Mode (`T`), and dedicated Help modal (`?` / `H`).
 
+### 7. 📱 Shinsei Anime: Standalone Native Android App
+* **Zero PC-Dependency Streaming:** No need to keep your PC running or maintain a tunnel to watch on your phone. The native Android app streams directly from Kyoto/Anilab CDNs.
+* **Autonomous "Dumb Runner" Architecture:** The APK runs a hot-reloadable JavaScript provider bundle (`provider.bundle.js`) using Android's native headless V8 engine with full modern ES6+ and Cloudflare Turnstile resilience.
+* **1:1 Crunchyroll Player Screen:**
+  - Center 3-button touch controls: `[⏪ 10]` `[ ▶ / ❚❚ ]` `[10 ⏩]`.
+  - Floating `[⚡ Skip Intro]` / `[⚡ Skip Outro]` buttons powered by real-time AniSkip API.
+  - Precision dual-axis vertical touch gestures: left-side screen swipe for brightness, right-side swipe for volume.
+  - Double-tap left/right edges for $\pm 10$s curved ripples.
+  - Top bar with episode badge, SUB/DUB toggle, `[⏭ Next]` episode button beside `[⚙ Settings]`, and aspect ratio zoom toggle.
+  - True OLED pitch black (`#0B0C0E`) cinema styling.
+  - Native Android 12+ Picture-in-Picture (PiP) and auto-saving watch progress to Room DB.
+* **⚡ P2P Watch History Sync (<50ms):**
+  - Run `anime-cli sync` in your PC terminal.
+  - Point your phone camera at the ASCII QR code inside the app's scanner sheet.
+  - Mobile Room DB and PC SQLite DB exchange watch history deltas in under 50ms over home Wi-Fi with relative-age conflict resolution (100% immune to phone/PC clock drift).
+  - Automatically hot-reloads the latest provider extraction script from PC to phone on sync.
+
 ---
 
 ## 🎮 CLI Commands & Flags
@@ -159,6 +176,7 @@ Choose an action >
 | :--- | :--- |
 | `anime-cli` | Open interactive menu dashboard |
 | `anime-cli <title>` | Search & stream immediately in MPV |
+| `anime-cli --sync` | Start P2P sync server & QR code for Shinsei Android app |
 | `anime-cli -b, --browser` | Launch web browser app |
 | `anime-cli -s, --share` | Launch web app with Cloudflare tunnel & QR code |
 | `anime-cli -c, --continue` | Resume playback of last watched anime episode |
@@ -168,6 +186,15 @@ Choose an action >
 | `anime-cli -d, --dub` | Prefer English Dub audio servers |
 | `anime-cli --sub` | Prefer Japanese Sub audio servers |
 | `anime-cli help, -h` | Display interactive CLI help & shortcuts guide |
+
+---
+
+### 📦 Building the Android APK
+```bash
+cd android
+./gradlew assembleDebug
+# Generated APK: android/app/build/outputs/apk/debug/app-debug.apk
+```
 
 ---
 
