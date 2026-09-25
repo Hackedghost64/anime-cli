@@ -62,6 +62,9 @@ import com.shinsei.anime.ui.theme.SurfaceBorder
 import com.shinsei.anime.ui.theme.SurfaceDark
 import com.shinsei.anime.ui.theme.SurfaceElevated
 import com.shinsei.anime.ui.theme.TextMuted
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Sync
 import com.shinsei.anime.ui.theme.TextPrimary
 import com.shinsei.anime.ui.theme.TextSecondary
 
@@ -70,7 +73,8 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onNavigateToDetail: (String) -> Unit,
     onPlayProgress: (WatchProgressEntity) -> Unit,
-    onOpenSyncSheet: () -> Unit
+    onOpenSyncSheet: () -> Unit,
+    onOpenInitSheet: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val continueWatching by viewModel.continueWatching.collectAsState()
@@ -80,58 +84,91 @@ fun HomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(BackgroundBlack)
+            .statusBarsPadding()
     ) {
         // Top App Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            // App Branding
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "SHINSEI",
                     color = CrunchyOrange,
                     fontWeight = FontWeight.Black,
-                    fontSize = 20.sp,
-                    letterSpacing = 1.sp
+                    fontSize = 18.sp,
+                    letterSpacing = 0.5.sp
                 )
                 Text(
                     text = " ANIME",
                     color = TextPrimary,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                    letterSpacing = 1.sp
+                    fontSize = 18.sp,
+                    letterSpacing = 0.5.sp
                 )
             }
 
-            // Sync with PC Button
-            Surface(
-                onClick = onOpenSyncSheet,
-                shape = RoundedCornerShape(16.dp),
-                color = SurfaceElevated,
-                border = androidx.compose.foundation.BorderStroke(1.dp, CrunchyOrange)
+            // Two Action Buttons: SYNC and INIT
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // 1. SYNC Button (PC Watch History Sync)
+                Surface(
+                    onClick = onOpenSyncSheet,
+                    shape = RoundedCornerShape(12.dp),
+                    color = SurfaceElevated,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CrunchyOrange)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.QrCodeScanner,
-                        contentDescription = "Sync",
-                        tint = CrunchyOrange,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "SYNC",
-                        color = CrunchyOrange,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sync,
+                            contentDescription = "Sync",
+                            tint = CrunchyOrange,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "SYNC",
+                            color = CrunchyOrange,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                // 2. INIT Button (Runner Script Setup & Cloud URL)
+                Surface(
+                    onClick = onOpenInitSheet,
+                    shape = RoundedCornerShape(12.dp),
+                    color = CrunchyOrange,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CrunchyOrange)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudDownload,
+                            contentDescription = "Initialize",
+                            tint = Color.Black,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "INIT",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 11.sp
+                        )
+                    }
                 }
             }
         }

@@ -30,6 +30,10 @@ import com.shinsei.anime.ui.sync.QrScannerSheet
 import com.shinsei.anime.ui.theme.BackgroundBlack
 import com.shinsei.anime.ui.theme.ShinseiAnimeTheme
 
+import androidx.compose.ui.platform.LocalContext
+import com.shinsei.anime.data.local.AppPreferences
+import com.shinsei.anime.ui.init.InitScreen
+
 class MainActivity : ComponentActivity() {
 
     private val homeViewModel: HomeViewModel by viewModels()
@@ -53,10 +57,26 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun AppNavigation() {
+        val context = LocalContext.current
+        val preferences = remember { AppPreferences(context) }
         val navController = rememberNavController()
         var showSyncSheet by remember { mutableStateOf(false) }
+        var showInitSheet by remember { mutableStateOf(false) }
 
-        NavHost(navController = navController, startDestination = "home") {
+        val startDest = if (preferences.isInitialized) "home" else "init"
+
+        NavHost(navController = navController, startDestination = startDest) {
+            composable("init") {
+                InitScreen(
+                    onInitialized = {
+                        homeViewModel.loadHomeFeed()
+                        navController.navigate("home") {
+                            popUpTo("init") { inclusive = true }
+                        }
+                    }
+                )
+            }
+
             composable("home") {
                 HomeScreen(
                     viewModel = homeViewModel,
@@ -68,6 +88,9 @@ class MainActivity : ComponentActivity() {
                     },
                     onOpenSyncSheet = {
                         showSyncSheet = true
+                    },
+                    onOpenInitSheet = {
+                        showInitSheet = true
                     }
                 )
             }
@@ -92,6 +115,15 @@ class MainActivity : ComponentActivity() {
             QrScannerSheet(
                 onDismiss = { showSyncSheet = false },
                 onSyncSuccess = {
+                    homeViewModel.loadHomeFeed()
+                }
+            )
+        }
+
+        if (showInitSheet) {
+            com.shinsei.anime.ui.init.InitSheet(
+                onDismiss = { showInitSheet = false },
+                onInitialized = {
                     homeViewModel.loadHomeFeed()
                 }
             )

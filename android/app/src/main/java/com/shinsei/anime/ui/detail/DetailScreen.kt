@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -141,7 +142,8 @@ fun DetailScreen(
                 IconButton(
                     onClick = onBack,
                     modifier = Modifier
-                        .padding(start = 12.dp, top = 12.dp)
+                        .statusBarsPadding()
+                        .padding(start = 12.dp, top = 8.dp)
                         .background(Color.Black.copy(alpha = 0.5f), CircleShape)
                         .align(Alignment.TopStart)
                 ) {

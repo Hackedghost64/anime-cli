@@ -24,3 +24,22 @@ def test_parse_range_selection():
     assert parse_range_selection("all", 4) == [0, 1, 2, 3]
     assert parse_range_selection("2-4, 7", 8) == [1, 2, 3, 6]
 
+def test_sync_flag_dispatches_to_cmd_sync(monkeypatch):
+    import cli
+    called = []
+    def mock_cmd_sync(port=8088):
+        called.append(port)
+    monkeypatch.setattr(cli, "cmd_sync", mock_cmd_sync)
+
+    # Test anime-cli -s
+    sys.argv = ["anime-cli", "-s"]
+    cli.main()
+    assert len(called) == 1
+    assert called[0] == 8088
+
+    # Test anime-cli sync
+    sys.argv = ["anime-cli", "sync"]
+    cli.main()
+    assert len(called) == 2
+    assert called[1] == 8088
+

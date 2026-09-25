@@ -138,7 +138,7 @@ fun QrScannerSheet(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "P2P LOCAL SYNC",
+                    text = "P2P SYNC WITH PC",
                     color = TextPrimary,
                     fontWeight = FontWeight.Black,
                     fontSize = 17.sp,
@@ -149,7 +149,7 @@ fun QrScannerSheet(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Run 'anime-cli sync' in your PC terminal, then scan the QR code to sync watch history in <50ms.",
+                text = "Run 'anime-cli -s' (or 'anime-cli sync') in your PC terminal, then scan the QR code to sync watch history & runner script.",
                 color = TextSecondary,
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center,
@@ -224,6 +224,9 @@ fun QrScannerSheet(
                         Button(
                             onClick = {
                                 if (res.success) {
+                                    val prefs = com.shinsei.anime.data.local.AppPreferences(context)
+                                    prefs.isInitialized = true
+                                    prefs.lastSyncTimestamp = System.currentTimeMillis()
                                     onSyncSuccess()
                                     onDismiss()
                                 } else {

@@ -214,6 +214,40 @@ class ScriptRunner(private val context: Context) {
         }
     }
 
+    suspend fun updateScriptFromUrl(url: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val req = Request.Builder().url(url).build()
+            val resp = okHttpClient.newCall(req).execute()
+            resp.use { response ->
+                if (!response.isSuccessful) return@withContext false
+                val code = response.body?.string() ?: return@withContext false
+                if (code.isBlank()) return@withContext false
+                updateScript(code)
+                true
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to fetch script from URL: $url", e)
+            false
+        }
+    }
+
+    fun resetScriptToBundled() {
+        try {
+            val hotScriptFile = File(context.filesDir, "provider.bundle.js")
+            if (hotScriptFile.exists()) {
+                hotScriptFile.delete()
+            }
+            Handler(Looper.getMainLooper()).post {
+                webView?.destroy()
+                webView = null
+                initDeferred = CompletableDeferred()
+                initWebView()
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to reset script to bundled asset", e)
+        }
+    }
+
     private suspend fun callJsMethod(methodName: String, args: List<Any?> = emptyList()): String {
         val ready = initDeferred.await()
         if (!ready) throw RuntimeException("Headless JS engine failed to initialize")

@@ -27,6 +27,7 @@ from anilab.kyoto import KyotoResolver
 import aniskip
 import db
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 
 # Terminal Colors
 C_RESET = "\033[0m"
@@ -405,13 +406,19 @@ def create_sync_app(token: str, sync_done_event: Optional[threading.Event] = Non
 
         # Check for provider bundle script update
         latest_script = None
-        script_path = os.path.join(os.path.dirname(__file__), "android/app/src/main/assets/provider.bundle.js")
-        if os.path.exists(script_path):
-            try:
-                with open(script_path, "r", encoding="utf-8") as f:
-                    latest_script = f.read()
-            except Exception:
-                pass
+        candidates = [
+            os.path.join(os.path.dirname(__file__), "android/app/src/main/assets/provider.bundle.js"),
+            os.path.join(os.path.dirname(__file__), "provider.bundle.js")
+        ]
+        for sp in candidates:
+            if os.path.exists(sp):
+                try:
+                    with open(sp, "r", encoding="utf-8") as f:
+                        latest_script = f.read()
+                        if latest_script:
+                            break
+                except Exception:
+                    pass
 
         # Trigger clean server exit in 600ms if event provided
         if sync_done_event:
@@ -424,6 +431,18 @@ def create_sync_app(token: str, sync_done_event: Optional[threading.Event] = Non
             "progress_deltas": pc_progress,
             "latest_script": latest_script
         }
+
+    @sync_app.get("/provider.bundle.js", response_class=PlainTextResponse)
+    async def get_provider_bundle():
+        candidates = [
+            os.path.join(os.path.dirname(__file__), "android/app/src/main/assets/provider.bundle.js"),
+            os.path.join(os.path.dirname(__file__), "provider.bundle.js")
+        ]
+        for sp in candidates:
+            if os.path.exists(sp):
+                with open(sp, "r", encoding="utf-8") as f:
+                    return f.read()
+        raise HTTPException(status_code=404, detail="provider.bundle.js not found")
 
     return sync_app
 
@@ -439,9 +458,10 @@ def cmd_sync(port: int = 8088):
     token = secrets.token_urlsafe(16)
     qr_payload = f"shinsei://sync?host={local_ip}&port={port}&token={token}"
 
-    print(f"{C_BOLD}⚡ P2P MOBILE SYNC (Shinsei Android App){C_RESET}")
-    print(f"  • {C_BOLD}Local Address:{C_RESET} http://{local_ip}:{port}")
-    print(f"  • {C_BOLD}Auth Token:{C_RESET}    {token}")
+    print(f"{C_BOLD}⚡ P2P MOBILE SYNC & INITIALIZATION (Shinsei Android App){C_RESET}")
+    print(f"  • {C_BOLD}Server Address:{C_RESET} http://{local_ip}:{port}")
+    print(f"  • {C_BOLD}Auth Token:{C_RESET}     {token}")
+    print(f"  • {C_DIM}Run this command anytime using: {C_BOLD}anime-cli -s{C_RESET}")
     print(f"  • {C_DIM}Connect your phone to the same Wi-Fi network as this PC.{C_RESET}")
     print(f"  • {C_DIM}Firewall tip: If connection fails, allow port {port}: sudo ufw allow {port}/tcp{C_RESET}\n")
 
@@ -467,6 +487,47 @@ def cmd_sync(port: int = 8088):
         print(f"  • Watch history is now 100% synchronized.\n")
     except KeyboardInterrupt:
         print("\nSync cancelled.")
+    finally:
+        server.should_exit = True
+        time.sleep(0.3)
+
+# -----------------------------------------------------------------------------
+# COMMAND: init (Serve provider.bundle.js for Mobile App Initialization)
+# -----------------------------------------------------------------------------
+def cmd_init(port: int = 8088):
+    import secrets
+    import uvicorn
+
+    banner()
+    local_ip = get_local_ip()
+    token = secrets.token_urlsafe(16)
+    script_url = f"http://{local_ip}:{port}/provider.bundle.js"
+    qr_payload = f"shinsei://init?url={script_url}&host={local_ip}&port={port}&token={token}"
+
+    print(f"{C_BOLD}🚀 SHINSEI RUNNER INITIALIZATION SERVER{C_RESET}")
+    print(f"  • {C_BOLD}Direct Script URL:{C_RESET} {C_CYAN}{script_url}{C_RESET}")
+    print(f"  • {C_BOLD}Auth Token:{C_RESET}        {token}")
+    print(f"  • {C_DIM}Run this command anytime using: {C_BOLD}anime-cli init{C_RESET}")
+    print(f"  • {C_DIM}Paste this URL into the app's [INIT] tab, or scan this QR code:{C_RESET}\n")
+
+    print_qr_code(qr_payload)
+
+    sync_done_event = threading.Event()
+    sync_stats = {"received": 0, "sent": 0}
+    sync_app = create_sync_app(token, sync_done_event, sync_stats)
+
+    config = uvicorn.Config(sync_app, host="0.0.0.0", port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    server_thread = threading.Thread(target=server.run, daemon=True)
+    server_thread.start()
+
+    print(f"{C_CYAN}Serving provider.bundle.js for mobile app initialization (Ctrl+C to stop)...{C_RESET}")
+    try:
+        while not sync_done_event.is_set():
+            time.sleep(0.2)
+        print(f"\n{C_GREEN}{C_BOLD}✓ Mobile App Initialized Successfully!{C_RESET}\n")
+    except KeyboardInterrupt:
+        print("\nServer stopped.")
     finally:
         server.should_exit = True
         time.sleep(0.3)
@@ -950,8 +1011,7 @@ def show_help():
     header("COMMAND-LINE SYNTAX & USAGE")
     row("anime-cli", "Open interactive navigation dashboard")
     row("anime-cli <title>", "Search & stream immediately in MPV")
-    row("anime-cli -b, --browser", "Launch modern Crunchyroll web interface")
-    row("anime-cli -s, --share", "Start public HTTPS tunnel with mobile QR")
+    row("anime-cli -s, --sync", "P2P mobile sync & runner init QR code")
     row("anime-cli -c, --continue", "Resume last watched episode")
     row("anime-cli -B, --binge", "Launch Binge Roulette mood selector")
     row("anime-cli --today, --schedule", "View today's live anime release radar")
@@ -973,19 +1033,13 @@ def show_help():
     row("q", "Quit player & save resume progress")
     row(">  /  <", "Next / Previous playlist episode")
 
-    header("MODERN WEB PLAYER KEYBOARD SHORTCUTS")
-    row("Space  or  K", "Play / Pause playback")
-    row("→  or  L", "Seek forward 10 seconds")
-    row("←  or  J", "Seek backward 10 seconds")
-    row("↑  /  ↓", "Adjust volume by 10%")
-    row("F", "Toggle Fullscreen")
-    row("T", "Toggle Theater Mode")
-    row("P", "Toggle Picture-in-Picture (PiP)")
-    row("M", "Toggle Mute")
-    row("N", "Jump to Next Episode")
-    row("?", "Toggle Help & Shortcuts Modal")
-    row("Double-Tap (Mobile)", "Seek ±10s with visual ripple effect")
-    row("⚡ Auto-Skip (Toggle)", "Automatically bypass Openings & Endings")
+    header("SHINSEI ANDROID APP GESTURES & CONTROLS")
+    row("Center [⏪10] [▶/❚❚] [10⏩]", "Playback control & instant 10s skip")
+    row("Top Bar [⏭ Next]", "Beside settings, jump to next episode")
+    row("Double-Tap Left / Right", "Curved ±10s ripple seek")
+    row("Vertical Drag Left / Right", "Swipe for Brightness / Volume")
+    row("⚡ Skip Intro / Outro Pill", "Instant AniSkip opening & ending jump")
+    row("Pinch to Fill", "Toggle 16:9 widescreen crop")
 
     print(f"{C_ORANGE}╰{sep}╯{C_RESET}")
     print()
@@ -998,13 +1052,11 @@ async def interactive_menu():
         banner()
         menu_options = [
             "🔍 Search & Watch Anime",
+            "⚡ P2P Mobile Sync & Init (QR code for Shinsei App) [-s]",
             "🎲 Binge Roulette (Quick 3-Question Match)",
             "📅 Today's Airing Radar (Live Release Schedule)",
             "▶ Continue Watching (Resume last episode)",
             "📥 Download Episode (1080p MP4 via FFmpeg)",
-            "⚡ P2P Mobile Sync (QR code for Shinsei Android app)",
-            "🌐 Launch Web Browser",
-            "🔗 Share Public Tunnel (QR Code for phone)",
             "❓ Help & Shortcuts Guide",
             "❌ Exit"
         ]
@@ -1013,34 +1065,28 @@ async def interactive_menu():
             await cmd_terminal()
             break
         elif sel == 1:
+            cmd_sync()
+            break
+        elif sel == 2:
             from anilab.binge import run_binge_match
             title = await run_binge_match()
             if title:
                 await cmd_terminal(query=title, ep_num=1)
             break
-        elif sel == 2:
+        elif sel == 3:
             from anilab.schedule import run_schedule_radar
             res = await run_schedule_radar()
             if res:
                 title, ep = res
                 await cmd_terminal(query=title, ep_num=ep)
             break
-        elif sel == 3:
+        elif sel == 4:
             await cmd_terminal(continue_last=True)
             break
-        elif sel == 4:
+        elif sel == 5:
             await cmd_terminal(download=True)
             break
-        elif sel == 5:
-            cmd_sync()
-            break
         elif sel == 6:
-            cmd_browser()
-            break
-        elif sel == 7:
-            cmd_browser(share=True)
-            break
-        elif sel == 8:
             show_help()
             try:
                 input(f"\n{C_ORANGE}Press Enter to return to menu...{C_RESET}")
@@ -1061,7 +1107,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(
         prog="anime-cli",
-        description="⚡ anime-cli: The Modern, Next-Gen Anime Streaming & Browser CLI",
+        description="⚡ anime-cli: High-Performance Anime Streaming & Mobile Sync CLI",
         formatter_class=argparse.RawTextHelpFormatter,
         add_help=False
     )
@@ -1070,19 +1116,20 @@ def main():
     
     # Simple flags
     parser.add_argument("query", nargs="?", default=None, help="Anime title to search & watch immediately")
-    parser.add_argument("-b", "--browser", action="store_true", help="Launch web browser app")
-    parser.add_argument("-s", "--share", action="store_true", help="Generate public HTTPS tunnel & QR code for phone")
+    parser.add_argument("-s", "--sync", dest="sync", action="store_true", help="Start P2P sync server & QR code for Shinsei Mobile App")
+    parser.add_argument("-i", "--init", dest="init", action="store_true", help="Start runner initialization server hosting provider.bundle.js")
     parser.add_argument("-c", "--continue", dest="continue_last", action="store_true", help="Resume last watched anime episode")
     parser.add_argument("-B", "--binge", action="store_true", help="Launch interactive 3-question Binge Roulette")
     parser.add_argument("--today", "--schedule", dest="today", action="store_true", help="View today's live anime release radar")
     parser.add_argument("-d", "--dub", action="store_true", help="Prefer English Dub audio")
     parser.add_argument("--sub", action="store_true", help="Prefer Japanese Sub audio")
     parser.add_argument("-o", "--download", action="store_true", help="Download episode in 1080p MP4 via FFmpeg")
-    parser.add_argument("--sync", action="store_true", help="Start P2P sync server & QR code for Shinsei Mobile App")
-    parser.add_argument("-p", "--port", type=int, default=8000, help="Server port (default: 8000)")
+    parser.add_argument("-p", "--port", type=int, default=8088, help="Server port (default: 8088)")
     parser.add_argument("--server", action="store_true", help="Run headless background streaming server")
     parser.add_argument("--no-sleep", "--keep-awake", dest="keep_awake", action="store_true", default=True, help="Prevent PC from sleeping or suspending while server is running (default: enabled)")
     parser.add_argument("--allow-sleep", dest="keep_awake", action="store_false", help="Allow PC to enter sleep/suspend while server is running")
+    parser.add_argument("-b", "--browser", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--share", action="store_true", help=argparse.SUPPRESS)
 
     args, unknown = parser.parse_known_args()
 
@@ -1102,15 +1149,20 @@ def main():
         parts = args.query.split(maxsplit=1)
         args.query = parts[1] if len(parts) > 1 else None
 
+    # Browser deprecated notice
+    if args.browser or args.share:
+        print(f"\n{C_GOLD}Note: The web browser has been superseded by the native Android app.{C_RESET}")
+        print(f"{C_CYAN}Starting P2P sync & initialization server (anime-cli -s) for your phone...{C_RESET}\n")
+        cmd_sync(port=args.port)
+        return
+
     # Dispatch based on simple flags
-    if args.sync or (args.query == "sync"):
-        cmd_sync(port=8088 if args.port == 8000 else args.port)
+    if args.init or (args.query in ("init", "initialize")):
+        cmd_init(port=args.port)
+    elif args.sync or (args.query in ("sync", "-s")):
+        cmd_sync(port=args.port)
     elif args.server or args.query in ("server", "serve", "stream"):
         cmd_stream(port=args.port, keep_awake=args.keep_awake)
-    elif args.share or (args.query == "share"):
-        cmd_browser(port=args.port, share=True, keep_awake=args.keep_awake)
-    elif args.browser or (args.query == "browser"):
-        cmd_browser(port=args.port, share=args.share, keep_awake=args.keep_awake)
     elif args.binge or (args.query == "binge"):
         from anilab.binge import run_binge_match
         async def _run_binge():
