@@ -10,7 +10,9 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Headers.Companion.toHeaders
@@ -59,6 +61,7 @@ class ScriptRunner(private val context: Context) {
             if (!initDeferred.isCompleted) {
                 initDeferred.complete(true)
             }
+            checkForRemoteUpdate()
         }
 
         @JavascriptInterface
@@ -185,17 +188,79 @@ class ScriptRunner(private val context: Context) {
         }
     }
 
+    companion object {
+        const val GITHUB_SCRIPT_URL =
+            "https://raw.githubusercontent.com/Hackedghost64/anime-cli/main/android/app/src/main/assets/provider.bundle.js"
+    }
+
     private fun loadScript(): String {
+        val bundled = context.assets.open("provider.bundle.js").use { inputStream ->
+            InputStreamReader(inputStream).readText()
+        }
+
         val hotScriptFile = File(context.filesDir, "provider.bundle.js")
         if (hotScriptFile.exists() && hotScriptFile.length() > 0) {
             try {
-                return hotScriptFile.readText()
+                val cached = hotScriptFile.readText()
+                val bundledVer = extractVersion(bundled)
+                val cachedVer = extractVersion(cached)
+                if (isNewerVersion(cachedVer, bundledVer)) {
+                    Log.i(tag, "Using newer OTA cached script v$cachedVer (bundled is v$bundledVer)")
+                    return cached
+                } else {
+                    Log.i(tag, "Bundled script v$bundledVer >= cached v$cachedVer, clearing stale cache")
+                    hotScriptFile.delete()
+                }
             } catch (e: Exception) {
-                Log.w(tag, "Failed to read hot-reloaded script, falling back to bundled asset", e)
+                Log.w(tag, "Failed to read cached script, using bundled", e)
+                hotScriptFile.delete()
             }
         }
-        return context.assets.open("provider.bundle.js").use { inputStream ->
-            InputStreamReader(inputStream).readText()
+        return bundled
+    }
+
+    private fun extractVersion(code: String): String {
+        val match = Regex("""exports\.version\s*=\s*["']([^"']+)["']""").find(code)
+        return match?.groupValues?.get(1) ?: "1.0.0"
+    }
+
+    private fun isNewerVersion(v1: String, v2: String): Boolean {
+        try {
+            val parts1 = v1.split(".").map { it.toIntOrNull() ?: 0 }
+            val parts2 = v2.split(".").map { it.toIntOrNull() ?: 0 }
+            val maxLen = maxOf(parts1.size, parts2.size)
+            for (i in 0 until maxLen) {
+                val p1 = parts1.getOrElse(i) { 0 }
+                val p2 = parts2.getOrElse(i) { 0 }
+                if (p1 > p2) return true
+                if (p1 < p2) return false
+            }
+        } catch (_: Exception) {}
+        return false
+    }
+
+    private fun checkForRemoteUpdate() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val req = Request.Builder().url(GITHUB_SCRIPT_URL).build()
+                val resp = okHttpClient.newCall(req).execute()
+                resp.use { response ->
+                    if (response.isSuccessful) {
+                        val remoteCode = response.body?.string() ?: return@use
+                        if (remoteCode.contains("ShinseiProvider") && remoteCode.length > 2000) {
+                            val bundled = context.assets.open("provider.bundle.js").use { InputStreamReader(it).readText() }
+                            val bundledVer = extractVersion(bundled)
+                            val remoteVer = extractVersion(remoteCode)
+                            if (isNewerVersion(remoteVer, bundledVer)) {
+                                Log.i(tag, "Found newer OTA script v$remoteVer on GitHub (bundled: v$bundledVer). Updating...")
+                                updateScript(remoteCode)
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.d(tag, "GitHub OTA script check skipped: ${e.message}")
+            }
         }
     }
 

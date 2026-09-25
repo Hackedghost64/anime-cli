@@ -6,7 +6,7 @@
 (function(exports) {
   'use strict';
 
-  exports.version = "1.1.0";
+  exports.version = "1.2.0";
 
   const ANILAB_BASE = "https://anilab2.amdapi.click/api";
   const KYOTO_BASE = "https://app.kyotoplayer.com/api/v4";
