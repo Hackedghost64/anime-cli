@@ -73,9 +73,10 @@
           items: (data.latest || data.data.latest).map(formatAnimeItem)
         });
       }
-      return { spotlight, rails };
+      const items = (rails[0] && rails[0].items && rails[0].items.length) ? rails[0].items : spotlight;
+      return { spotlight, rails, items };
     } catch (err) {
-      return { spotlight: [], rails: [] };
+      return { spotlight: [], rails: [], items: [] };
     }
   };
 
@@ -229,29 +230,61 @@
     const best = matches.find(m => m.toLowerCase().includes('master.m3u8')) || matches[0];
     return {
       url: best,
+      stream_url: best,
       headers: { "Referer": "https://play.app/", "User-Agent": BROWSER_UA }
     };
   };
 
   /**
-   * 7. AniSkip Integration
+   * Dedicated Kyoto Episode Stream Resolver for Mobile
    */
-  exports.getSkipTimes = async function(title, epNum) {
-    if (!title) return { op: null, ed: null };
+  exports.resolveKyotoStream = async function(animeId, epNum, serverId = "4", dub = false) {
+    if (!animeId) throw new Error("Missing animeId");
+    const episodes = await exports.getEpisodes(animeId);
+    if (!episodes.length) throw new Error("No episodes found for anime " + animeId);
+
+    const ep = episodes.find(e => String(e.num) === String(epNum)) || episodes[0];
+    const servers = await exports.getServers(ep.id);
+
+    let chosenServer = null;
+    if (dub) {
+      chosenServer = servers.find(s => s.lang === 'dub');
+    }
+    if (!chosenServer) {
+      chosenServer = servers.find(s => String(s.id) === String(serverId)) || servers[0];
+    }
+    if (!chosenServer) {
+      throw new Error("No playback servers found for episode " + epNum);
+    }
+
+    return await exports.resolveStream(animeId, chosenServer.id);
+  };
+
+  /**
+   * 7. AniSkip Integration (Supports numeric malId or title string)
+   */
+  exports.getSkipTimes = async function(titleOrMalId, epNum) {
+    if (!titleOrMalId) return { op: null, ed: null };
     try {
       const epInt = isNaN(parseInt(epNum, 10)) ? 1 : parseInt(epNum, 10);
-      const alRes = await requestJson(`https://graphql.anilist.co`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify({
-          query: `query ($q: String) { Media (search: $q, type: ANIME) { id } }`,
-          variables: { q: title }
-        })
-      });
-      const malOrAlId = alRes?.data?.Media?.id;
-      if (!malOrAlId) return { op: null, ed: null };
+      let targetId = null;
 
-      const skipUrl = `${ANISKIP_BASE}/skip-times/${malOrAlId}/${epInt}?types[]=op&types[]=ed&episodeLength=1440`;
+      if (typeof titleOrMalId === 'number' || /^\d+$/.test(String(titleOrMalId).trim())) {
+        targetId = parseInt(titleOrMalId, 10);
+      } else {
+        const alRes = await requestJson(`https://graphql.anilist.co`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({
+            query: `query ($q: String) { Media (search: $q, type: ANIME) { id } }`,
+            variables: { q: String(titleOrMalId) }
+          })
+        });
+        targetId = alRes?.data?.Media?.id;
+      }
+      if (!targetId || targetId <= 0) return { op: null, ed: null };
+
+      const skipUrl = `${ANISKIP_BASE}/skip-times/${targetId}/${epInt}?types[]=op&types[]=ed&episodeLength=1440`;
       const skipData = await requestJson(skipUrl);
       if (!skipData.found || !Array.isArray(skipData.results)) return { op: null, ed: null };
 
@@ -266,6 +299,10 @@
       return { op: null, ed: null };
     }
   };
+
+  // Aliases for unified SDK contract
+  exports.getHome = exports.getHomeFeed;
+  exports.getDetails = exports.getPost;
 
   // Helper Utilities
   async function getKyotoRoutes(postId) {
@@ -303,4 +340,5 @@
     };
   }
 
-})(typeof globalThis !== 'undefined' ? (globalThis.__provider = globalThis.__provider || {}) : this);
+})(typeof globalThis !== 'undefined' ? (globalThis.ShinseiProvider = globalThis.__provider = globalThis.__provider || {}) : this);
+

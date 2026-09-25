@@ -116,12 +116,7 @@ fun CrunchyrollPlayerControls(
             curPos >= skipOutroRange.first && curPos <= skipOutroRange.second
 
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onToggleControls() }
+        modifier = modifier.fillMaxSize()
     ) {
         // 1. Double-tap Ripple Visual
         if (activeDoubleTap != null) {

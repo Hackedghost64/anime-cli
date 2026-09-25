@@ -31,7 +31,7 @@ class ScriptRunner(private val context: Context) {
     private val tag = "ScriptRunner"
     private var webView: WebView? = null
     private val pendingRequests = ConcurrentHashMap<String, CompletableDeferred<String>>()
-    private val initDeferred = CompletableDeferred<Boolean>()
+    private var initDeferred = CompletableDeferred<Boolean>()
 
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -63,43 +63,43 @@ class ScriptRunner(private val context: Context) {
 
         @JavascriptInterface
         fun httpFetchSync(url: String, optionsJson: String): String {
-            return try {
-                val json = if (optionsJson.isNotEmpty()) JSONObject(optionsJson) else JSONObject()
-                val method = json.optString("method", "GET").uppercase()
-                val bodyStr = if (json.has("body")) json.getString("body") else null
-                val headersMap = mutableMapOf<String, String>()
+            val json = if (optionsJson.isNotEmpty()) JSONObject(optionsJson) else JSONObject()
+            val method = json.optString("method", "GET").uppercase()
+            val bodyStr = if (json.has("body")) json.getString("body") else null
+            val headersMap = mutableMapOf<String, String>()
 
-                val h = json.optJSONObject("headers")
-                if (h != null) {
-                    val keys = h.keys()
-                    while (keys.hasNext()) {
-                        val k = keys.next()
-                        headersMap[k] = h.getString(k)
-                    }
+            val h = json.optJSONObject("headers")
+            if (h != null) {
+                val keys = h.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    headersMap[k] = h.getString(k)
                 }
-                if (!headersMap.containsKey("User-Agent")) {
-                    headersMap["User-Agent"] = "okhttp/4.12.0"
-                }
+            }
+            if (!headersMap.containsKey("User-Agent")) {
+                headersMap["User-Agent"] = "okhttp/4.12.0"
+            }
 
-                val reqBuilder = Request.Builder().url(url)
-                if (headersMap.isNotEmpty()) {
-                    reqBuilder.headers(headersMap.toHeaders())
-                }
+            val reqBuilder = Request.Builder().url(url)
+            if (headersMap.isNotEmpty()) {
+                reqBuilder.headers(headersMap.toHeaders())
+            }
 
-                if (method == "POST") {
-                    val mediaType = headersMap["Content-Type"]?.toMediaTypeOrNull()
-                        ?: "application/json; charset=utf-8".toMediaTypeOrNull()
-                    val reqBody = (bodyStr ?: "").toRequestBody(mediaType)
-                    reqBuilder.post(reqBody)
-                } else {
-                    reqBuilder.get()
-                }
+            if (method == "POST") {
+                val mediaType = headersMap["Content-Type"]?.toMediaTypeOrNull()
+                    ?: "application/json; charset=utf-8".toMediaTypeOrNull()
+                val reqBody = (bodyStr ?: "").toRequestBody(mediaType)
+                reqBuilder.post(reqBody)
+            } else {
+                reqBuilder.get()
+            }
 
-                val resp = okHttpClient.newCall(reqBuilder.build()).execute()
-                resp.body?.string() ?: ""
-            } catch (e: Exception) {
-                Log.e(tag, "OkHttp bridge fetch failed for $url: ${e.message}")
-                ""
+            val resp = okHttpClient.newCall(reqBuilder.build()).execute()
+            return resp.use { response ->
+                if (!response.isSuccessful && response.code >= 400) {
+                    throw RuntimeException("HTTP ${response.code} on $url")
+                }
+                response.body?.string() ?: ""
             }
         }
     }
@@ -206,6 +206,7 @@ class ScriptRunner(private val context: Context) {
             Handler(Looper.getMainLooper()).post {
                 webView?.destroy()
                 webView = null
+                initDeferred = CompletableDeferred()
                 initWebView()
             }
         } catch (e: Exception) {
@@ -214,21 +215,27 @@ class ScriptRunner(private val context: Context) {
     }
 
     private suspend fun callJsMethod(methodName: String, args: List<Any?> = emptyList()): String {
-        initDeferred.await()
+        val ready = initDeferred.await()
+        if (!ready) throw RuntimeException("Headless JS engine failed to initialize")
+
         val requestId = UUID.randomUUID().toString()
         val deferred = CompletableDeferred<String>()
         pendingRequests[requestId] = deferred
 
-        val argsJson = JSONArray(args).toString()
-        val jsCall = "invokeMethod(${JSONObject.quote(requestId)}, ${JSONObject.quote(methodName)}, ${JSONObject.quote(argsJson)});"
+        return try {
+            val argsJson = JSONArray(args).toString()
+            val jsCall = "invokeMethod(${JSONObject.quote(requestId)}, ${JSONObject.quote(methodName)}, ${JSONObject.quote(argsJson)});"
 
-        withContext(Dispatchers.Main) {
-            webView?.evaluateJavascript(jsCall, null)
+            withContext(Dispatchers.Main) {
+                webView?.evaluateJavascript(jsCall, null)
+            }
+
+            withTimeoutOrNull(25000L) {
+                deferred.await()
+            } ?: throw RuntimeException("Timeout calling ShinseiProvider.$methodName")
+        } finally {
+            pendingRequests.remove(requestId)
         }
-
-        return withTimeoutOrNull(20000L) {
-            deferred.await()
-        } ?: throw RuntimeException("Timeout calling ShinseiProvider.$methodName")
     }
 
     suspend fun getHome(): String = callJsMethod("getHome")
@@ -246,8 +253,8 @@ class ScriptRunner(private val context: Context) {
         dub: Boolean = false
     ): String = callJsMethod("resolveKyotoStream", listOf(animeId, epNum, serverId, dub))
 
-    suspend fun getSkipTimes(malId: Long, epNum: String): String =
-        callJsMethod("getSkipTimes", listOf(malId, epNum))
+    suspend fun getSkipTimes(target: String, epNum: String): String =
+        callJsMethod("getSkipTimes", listOf(target, epNum))
 
     fun destroy() {
         Handler(Looper.getMainLooper()).post {

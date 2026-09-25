@@ -420,6 +420,7 @@ def create_sync_app(token: str, sync_done_event: Optional[threading.Event] = Non
         return {
             "ok": True,
             "merged": merged_count,
+            "server_timestamp": int(time.time()),
             "progress_deltas": pc_progress,
             "latest_script": latest_script
         }

@@ -128,7 +128,7 @@ class PlayerActivity : ComponentActivity() {
                     dub = isDub
                 )
                 val streamObj = JSONObject(streamJsonStr)
-                val streamUrl = streamObj.optString("stream_url", "")
+                val streamUrl = streamObj.optString("url", streamObj.optString("stream_url", ""))
                 val headersMap = mutableMapOf<String, String>()
                 val h = streamObj.optJSONObject("headers")
                 if (h != null) {
@@ -196,22 +196,24 @@ class PlayerActivity : ComponentActivity() {
         var skipIntroRange by remember { mutableStateOf<Pair<Long, Long>?>(null) }
         var skipOutroRange by remember { mutableStateOf<Pair<Long, Long>?>(null) }
 
-        // Fetch AniSkip intervals
-        LaunchedEffect(malId, epNum) {
-            if (malId > 0) {
+        // Fetch AniSkip intervals (supports both malId and animeTitle)
+        LaunchedEffect(animeTitle, malId, epNum) {
+            val queryTarget = if (malId > 0) malId.toString() else animeTitle
+            if (queryTarget.isNotEmpty()) {
                 try {
-                    val skipJsonStr = ShinseiApp.instance.scriptRunner.getSkipTimes(malId, epNum)
-                    val arr = JSONArray(skipJsonStr)
-                    for (i in 0 until arr.length()) {
-                        val item = arr.getJSONObject(i)
-                        val type = item.optString("type")
-                        val startMs = (item.optDouble("start", 0.0) * 1000).toLong()
-                        val endMs = (item.optDouble("end", 0.0) * 1000).toLong()
-                        if (type == "op") {
-                            skipIntroRange = Pair(startMs, endMs)
-                        } else if (type == "ed") {
-                            skipOutroRange = Pair(startMs, endMs)
-                        }
+                    val skipJsonStr = ShinseiApp.instance.scriptRunner.getSkipTimes(queryTarget, epNum)
+                    val skipObj = JSONObject(skipJsonStr)
+                    val opArr = skipObj.optJSONArray("op")
+                    if (opArr != null && opArr.length() >= 2) {
+                        val startMs = (opArr.getDouble(0) * 1000).toLong()
+                        val endMs = (opArr.getDouble(1) * 1000).toLong()
+                        skipIntroRange = Pair(startMs, endMs)
+                    }
+                    val edArr = skipObj.optJSONArray("ed")
+                    if (edArr != null && edArr.length() >= 2) {
+                        val startMs = (edArr.getDouble(0) * 1000).toLong()
+                        val endMs = (edArr.getDouble(1) * 1000).toLong()
+                        skipOutroRange = Pair(startMs, endMs)
                     }
                 } catch (e: Exception) {
                     // ignore

@@ -99,8 +99,29 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun parseAnimeCards(jsonStr: String): List<AnimeCard> {
         val list = mutableListOf<AnimeCard>()
+        if (jsonStr.isBlank()) return list
         try {
-            val arr = JSONArray(jsonStr)
+            val trimmed = jsonStr.trim()
+            val arr: JSONArray = when {
+                trimmed.startsWith("[") -> JSONArray(trimmed)
+                trimmed.startsWith("{") -> {
+                    val root = JSONObject(trimmed)
+                    when {
+                        root.has("items") -> root.optJSONArray("items")
+                        root.has("results") -> root.optJSONArray("results")
+                        root.has("spotlight") -> root.optJSONArray("spotlight")
+                        root.has("rails") -> {
+                            val rails = root.optJSONArray("rails")
+                            if (rails != null && rails.length() > 0) {
+                                rails.getJSONObject(0).optJSONArray("items")
+                            } else null
+                        }
+                        else -> null
+                    } ?: JSONArray()
+                }
+                else -> JSONArray()
+            }
+
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
                 val id = obj.optString("id", "")
