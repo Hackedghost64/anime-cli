@@ -1,31 +1,57 @@
 package com.shinsei.anime.ui.player
 
 import android.app.PictureInPictureParams
+import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
-import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -34,10 +60,18 @@ import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import coil.compose.AsyncImage
 import com.shinsei.anime.ShinseiApp
 import com.shinsei.anime.data.local.WatchProgressEntity
 import com.shinsei.anime.ui.theme.BackgroundBlack
+import com.shinsei.anime.ui.theme.CrunchyOrange
 import com.shinsei.anime.ui.theme.ShinseiAnimeTheme
+import com.shinsei.anime.ui.theme.SurfaceBorder
+import com.shinsei.anime.ui.theme.SurfaceDark
+import com.shinsei.anime.ui.theme.SurfaceElevated
+import com.shinsei.anime.ui.theme.TextMuted
+import com.shinsei.anime.ui.theme.TextPrimary
+import com.shinsei.anime.ui.theme.TextSecondary
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -67,7 +101,6 @@ class PlayerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Keep screen on during playback
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemUI()
 
@@ -120,18 +153,15 @@ class PlayerActivity : ComponentActivity() {
                 val existing = app.database.watchProgressDao().getProgress(animeId, epId)
                 val initialPosMs = ((existing?.position ?: 0.0) * 1000).toLong()
 
-                // Check if already downloaded for offline playback
                 val downloaded = app.database.downloadDao().getDownload(animeId, epId)
-                if (downloaded != null && downloaded.status == com.shinsei.anime.data.local.DownloadEntity.STATUS_COMPLETED && java.io.File(downloaded.localPath).exists()) {
-                    android.util.Log.d("PlayerActivity", "Playing offline downloaded episode from ${downloaded.localPath}")
-                    media3Manager.prepareMedia(
-                        url = downloaded.localPath,
-                        initialPositionMs = initialPosMs
-                    )
+                if (downloaded != null &&
+                    downloaded.status == com.shinsei.anime.data.local.DownloadEntity.STATUS_COMPLETED &&
+                    java.io.File(downloaded.localPath).exists()
+                ) {
+                    media3Manager.prepareMedia(url = downloaded.localPath, initialPositionMs = initialPosMs)
                     return@launch
                 }
 
-                // Resolve Kyoto stream m3u8
                 val streamJsonStr = app.scriptRunner.resolveKyotoStream(
                     animeId = animeId,
                     epNum = epNum,
@@ -156,11 +186,19 @@ class PlayerActivity : ComponentActivity() {
                         initialPositionMs = initialPosMs
                     )
                 } else {
-                    android.widget.Toast.makeText(this@PlayerActivity, "Stream unavailable for episode $epNum", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(
+                        this@PlayerActivity,
+                        "Stream unavailable for episode $epNum",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
                 }
             } catch (e: Exception) {
                 android.util.Log.e("PlayerActivity", "Playback resolution error", e)
-                android.widget.Toast.makeText(this@PlayerActivity, "Playback error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                android.widget.Toast.makeText(
+                    this@PlayerActivity,
+                    "Playback error: ${e.message}",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
             }
         }
     }
@@ -195,46 +233,48 @@ class PlayerActivity : ComponentActivity() {
         ShinseiApp.instance.database.watchProgressDao().upsert(entity)
     }
 
+    // Called from controls via lambda — locks to landscape
+    internal fun goFullscreen() {
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    }
+
+    // Called from minimize button — returns to portrait
+    internal fun exitFullscreen() {
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+    }
+
     @OptIn(UnstableApi::class)
     @Composable
     private fun PlayerScreenContent() {
         val playerState by media3Manager.playerState.collectAsState()
         var controlsVisible by remember { mutableStateOf(true) }
-        var isZoomMode by remember { mutableStateOf(false) }
-
         var activeDoubleTap by remember { mutableStateOf<DoubleTapRipple?>(null) }
-        var activeVolume by remember { mutableStateOf<Float?>(null) }
-        var activeBrightness by remember { mutableStateOf<Float?>(null) }
-
         var skipIntroRange by remember { mutableStateOf<Pair<Long, Long>?>(null) }
         var skipOutroRange by remember { mutableStateOf<Pair<Long, Long>?>(null) }
 
-        // Fetch AniSkip intervals (supports both malId and animeTitle)
+        val config = LocalConfiguration.current
+        val isLandscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+        // AniSkip intervals
         LaunchedEffect(animeTitle, malId, epNum) {
             val queryTarget = if (malId > 0) malId.toString() else animeTitle
             if (queryTarget.isNotEmpty()) {
                 try {
                     val skipJsonStr = ShinseiApp.instance.scriptRunner.getSkipTimes(queryTarget, epNum)
                     val skipObj = JSONObject(skipJsonStr)
-                    val opArr = skipObj.optJSONArray("op")
-                    if (opArr != null && opArr.length() >= 2) {
-                        val startMs = (opArr.getDouble(0) * 1000).toLong()
-                        val endMs = (opArr.getDouble(1) * 1000).toLong()
-                        skipIntroRange = Pair(startMs, endMs)
+                    skipObj.optJSONArray("op")?.let { opArr ->
+                        if (opArr.length() >= 2) skipIntroRange =
+                            Pair((opArr.getDouble(0) * 1000).toLong(), (opArr.getDouble(1) * 1000).toLong())
                     }
-                    val edArr = skipObj.optJSONArray("ed")
-                    if (edArr != null && edArr.length() >= 2) {
-                        val startMs = (edArr.getDouble(0) * 1000).toLong()
-                        val endMs = (edArr.getDouble(1) * 1000).toLong()
-                        skipOutroRange = Pair(startMs, endMs)
+                    skipObj.optJSONArray("ed")?.let { edArr ->
+                        if (edArr.length() >= 2) skipOutroRange =
+                            Pair((edArr.getDouble(0) * 1000).toLong(), (edArr.getDouble(1) * 1000).toLong())
                     }
-                } catch (e: Exception) {
-                    // ignore
-                }
+                } catch (e: Exception) { /* ignore */ }
             }
         }
 
-        // Auto-hide controls timer (3.5 seconds)
+        // Auto-hide controls after 3.5s
         LaunchedEffect(controlsVisible, playerState.isPlaying) {
             if (controlsVisible && playerState.isPlaying) {
                 delay(3500L)
@@ -242,19 +282,7 @@ class PlayerActivity : ComponentActivity() {
             }
         }
 
-        // Auto-clear gesture indicators
-        LaunchedEffect(activeVolume) {
-            if (activeVolume != null) {
-                delay(1200L)
-                activeVolume = null
-            }
-        }
-        LaunchedEffect(activeBrightness) {
-            if (activeBrightness != null) {
-                delay(1200L)
-                activeBrightness = null
-            }
-        }
+        // Auto-clear double tap visual
         LaunchedEffect(activeDoubleTap) {
             if (activeDoubleTap != null) {
                 delay(600L)
@@ -262,86 +290,196 @@ class PlayerActivity : ComponentActivity() {
             }
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(BackgroundBlack)
-        ) {
-            // Media3 PlayerView (useController = false so gestures pass cleanly to Compose)
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        player = media3Manager.getPlayer()
-                        useController = false
-                        resizeMode = if (isZoomMode) {
-                            AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                        } else {
-                            AspectRatioFrameLayout.RESIZE_MODE_FIT
+        if (isLandscape) {
+            // ─────────── LANDSCAPE: True fullscreen ───────────
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+            ) {
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            player = media3Manager.getPlayer()
+                            useController = false
+                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                            layoutParams = ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
                         }
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                PlayerGestureDetector(
+                    modifier = Modifier.fillMaxSize(),
+                    onSingleTap = { controlsVisible = !controlsVisible },
+                    onDoubleTapSeek = { offsetMs -> media3Manager.seekRelative(offsetMs) },
+                    onDoubleTapVisual = { rip -> activeDoubleTap = rip }
+                ) {
+                    CrunchyrollPlayerControls(
+                        animeTitle = animeTitle,
+                        episodeTitle = epName,
+                        episodeNum = epNum,
+                        isDub = isDub,
+                        playerState = playerState,
+                        controlsVisible = controlsVisible && !isPipMode,
+                        hasNextEpisode = currentEpIndex + 1 < episodesList.size,
+                        isLandscape = true,
+                        activeDoubleTap = activeDoubleTap,
+                        skipIntroRange = skipIntroRange,
+                        skipOutroRange = skipOutroRange,
+                        onToggleControls = { controlsVisible = !controlsVisible },
+                        onBack = { finish() },
+                        onPlayPause = { media3Manager.togglePlayPause() },
+                        onSeekRelative = { offsetMs -> media3Manager.seekRelative(offsetMs) },
+                        onSeekTo = { posMs -> media3Manager.seekTo(posMs) },
+                        onNextEpisode = { playNextEpisode() },
+                        onToggleDub = { isDub = !isDub; loadStreamAndPlay() },
+                        onToggleFullscreen = { exitFullscreen() },
+                        onSelectQuality = { q -> media3Manager.setQuality(q) },
+                        onSelectSpeed = { s -> media3Manager.setPlaybackSpeed(s) },
+                        onSkipIntro = { skipIntroRange?.second?.let { media3Manager.seekTo(it) } },
+                        onSkipOutro = { skipOutroRange?.second?.let { media3Manager.seekTo(it) } }
+                    )
+                }
+            }
+        } else {
+            // ─────────── PORTRAIT: 16:9 video top + info below ───────────
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(BackgroundBlack)
+            ) {
+                // 16:9 video area with controls overlay
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .background(Color.Black)
+                ) {
+                    AndroidView(
+                        factory = { ctx ->
+                            PlayerView(ctx).apply {
+                                player = media3Manager.getPlayer()
+                                useController = false
+                                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                layoutParams = ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+
+                    PlayerGestureDetector(
+                        modifier = Modifier.fillMaxSize(),
+                        onSingleTap = { controlsVisible = !controlsVisible },
+                        onDoubleTapSeek = { offsetMs -> media3Manager.seekRelative(offsetMs) },
+                        onDoubleTapVisual = { rip -> activeDoubleTap = rip }
+                    ) {
+                        CrunchyrollPlayerControls(
+                            animeTitle = animeTitle,
+                            episodeTitle = epName,
+                            episodeNum = epNum,
+                            isDub = isDub,
+                            playerState = playerState,
+                            controlsVisible = controlsVisible && !isPipMode,
+                            hasNextEpisode = currentEpIndex + 1 < episodesList.size,
+                            isLandscape = false,
+                            activeDoubleTap = activeDoubleTap,
+                            skipIntroRange = skipIntroRange,
+                            skipOutroRange = skipOutroRange,
+                            onToggleControls = { controlsVisible = !controlsVisible },
+                            onBack = { finish() },
+                            onPlayPause = { media3Manager.togglePlayPause() },
+                            onSeekRelative = { offsetMs -> media3Manager.seekRelative(offsetMs) },
+                            onSeekTo = { posMs -> media3Manager.seekTo(posMs) },
+                            onNextEpisode = { playNextEpisode() },
+                            onToggleDub = { isDub = !isDub; loadStreamAndPlay() },
+                            onToggleFullscreen = { goFullscreen() },
+                            onSelectQuality = { q -> media3Manager.setQuality(q) },
+                            onSelectSpeed = { s -> media3Manager.setPlaybackSpeed(s) },
+                            onSkipIntro = { skipIntroRange?.second?.let { media3Manager.seekTo(it) } },
+                            onSkipOutro = { skipOutroRange?.second?.let { media3Manager.seekTo(it) } }
                         )
                     }
-                },
-                update = { pv ->
-                    pv.resizeMode = if (isZoomMode) {
-                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                    } else {
-                        AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
+                }
 
-            // Gesture Detector Layer
-            PlayerGestureDetector(
-                modifier = Modifier.fillMaxSize(),
-                onSingleTap = { controlsVisible = !controlsVisible },
-                onDoubleTapSeek = { offsetMs -> media3Manager.seekRelative(offsetMs) },
-                onScrubSeek = { deltaMs -> media3Manager.seekRelative(deltaMs) },
-                onScrubCommit = { /* noop */ },
-                onBrightnessChange = { b -> activeBrightness = b },
-                onVolumeChange = { v -> activeVolume = v },
-                onDoubleTapVisual = { rip -> activeDoubleTap = rip }
-            ) {
-                // Crunchyroll Controls Overlay
-                CrunchyrollPlayerControls(
-                    animeTitle = animeTitle,
-                    episodeTitle = epName,
-                    episodeNum = epNum,
-                    isDub = isDub,
-                    playerState = playerState,
-                    controlsVisible = controlsVisible && !isPipMode,
-                    hasNextEpisode = currentEpIndex + 1 < episodesList.size,
-                    isZoomMode = isZoomMode,
-                    activeDoubleTap = activeDoubleTap,
-                    activeVolume = activeVolume,
-                    activeBrightness = activeBrightness,
-                    skipIntroRange = skipIntroRange,
-                    skipOutroRange = skipOutroRange,
-                    onToggleControls = { controlsVisible = !controlsVisible },
-                    onBack = { finish() },
-                    onPlayPause = { media3Manager.togglePlayPause() },
-                    onSeekRelative = { offsetMs -> media3Manager.seekRelative(offsetMs) },
-                    onSeekTo = { posMs -> media3Manager.seekTo(posMs) },
-                    onNextEpisode = { playNextEpisode() },
-                    onToggleDub = {
-                        isDub = !isDub
-                        loadStreamAndPlay()
-                    },
-                    onToggleZoom = { isZoomMode = !isZoomMode },
-                    onSelectQuality = { q -> media3Manager.setQuality(q) },
-                    onSelectSpeed = { s -> media3Manager.setPlaybackSpeed(s) },
-                    onSkipIntro = {
-                        val end = skipIntroRange?.second ?: return@CrunchyrollPlayerControls
-                        media3Manager.seekTo(end)
-                    },
-                    onSkipOutro = {
-                        val end = skipOutroRange?.second ?: return@CrunchyrollPlayerControls
-                        media3Manager.seekTo(end)
+                // Scrollable content below the video
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .background(BackgroundBlack)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    // Episode title
+                    Text(
+                        text = animeTitle,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 16.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    val epLabel = buildString {
+                        if (epNum.isNotEmpty()) append("Episode $epNum")
+                        if (epName.isNotEmpty()) {
+                            if (isNotEmpty()) append(" – ")
+                            append(epName)
+                        }
                     }
-                )
+                    if (epLabel.isNotEmpty()) {
+                        Text(
+                            text = epLabel,
+                            color = CrunchyOrange,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
+                        )
+                    }
+
+                    // "Up Next" card
+                    val nextEp = if (currentEpIndex + 1 < episodesList.size)
+                        episodesList[currentEpIndex + 1] else null
+                    if (nextEp != null) {
+                        Text(
+                            text = "Up Next",
+                            color = TextSecondary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        UpNextCard(
+                            animeTitle = animeTitle,
+                            poster = animePoster,
+                            nextEp = nextEp,
+                            onClick = { playNextEpisode() }
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
+                    // View All Episodes button
+                    Surface(
+                        onClick = { finish() }, // Back to DetailScreen which has full episode list
+                        shape = RoundedCornerShape(8.dp),
+                        color = SurfaceDark,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, SurfaceBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "View All Episodes",
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(vertical = 14.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
             }
         }
     }
@@ -372,9 +510,7 @@ class PlayerActivity : ComponentActivity() {
                     .setAspectRatio(Rational(16, 9))
                     .build()
                 enterPictureInPictureMode(params)
-            } catch (e: Exception) {
-                // ignore
-            }
+            } catch (e: Exception) { /* ignore */ }
         }
     }
 
@@ -391,9 +527,7 @@ class PlayerActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !isInPictureInPictureMode) {
             media3Manager.pause()
         }
-        lifecycleScope.launch {
-            saveCurrentProgress()
-        }
+        lifecycleScope.launch { saveCurrentProgress() }
     }
 
     override fun onStop() {
@@ -407,5 +541,90 @@ class PlayerActivity : ComponentActivity() {
         super.onDestroy()
         autoSaveJob?.cancel()
         media3Manager.release()
+    }
+}
+
+@Composable
+private fun UpNextCard(
+    animeTitle: String,
+    poster: String,
+    nextEp: JSONObject,
+    onClick: () -> Unit
+) {
+    val nextNum = nextEp.optString("num", "")
+    val nextName = nextEp.optString("name", "")
+
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(10.dp),
+        color = SurfaceDark,
+        border = androidx.compose.foundation.BorderStroke(1.dp, SurfaceBorder),
+        modifier = androidx.compose.ui.Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = androidx.compose.ui.Modifier.padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = androidx.compose.ui.Modifier
+                    .width(100.dp)
+                    .height(60.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(SurfaceElevated)
+            ) {
+                if (poster.isNotEmpty()) {
+                    AsyncImage(
+                        model = poster,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = androidx.compose.ui.Modifier.fillMaxSize()
+                    )
+                }
+                Box(
+                    modifier = androidx.compose.ui.Modifier
+                        .size(28.dp)
+                        .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                        .align(Alignment.Center)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Play",
+                        tint = CrunchyOrange,
+                        modifier = androidx.compose.ui.Modifier
+                            .size(18.dp)
+                            .align(Alignment.Center)
+                    )
+                }
+            }
+
+            Column(
+                modifier = androidx.compose.ui.Modifier
+                    .weight(1f)
+                    .padding(start = 10.dp)
+            ) {
+                Text(
+                    text = animeTitle,
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = if (nextNum.isNotEmpty()) "Episode $nextNum" else "Next Episode",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+                if (nextName.isNotEmpty()) {
+                    Text(
+                        text = nextName,
+                        color = TextMuted,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
     }
 }

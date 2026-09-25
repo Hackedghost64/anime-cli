@@ -7,8 +7,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +22,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Fullscreen
@@ -33,7 +30,6 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -53,7 +49,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -65,10 +60,8 @@ import com.shinsei.anime.ui.theme.PlayerBottomScrim
 import com.shinsei.anime.ui.theme.PlayerTopScrim
 import com.shinsei.anime.ui.theme.SurfaceBorder
 import com.shinsei.anime.ui.theme.SurfaceDark
-import com.shinsei.anime.ui.theme.TextMuted
 import com.shinsei.anime.ui.theme.TextPrimary
 import com.shinsei.anime.ui.theme.TextSecondary
-import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,10 +74,8 @@ fun CrunchyrollPlayerControls(
     playerState: PlayerState,
     controlsVisible: Boolean,
     hasNextEpisode: Boolean,
-    isZoomMode: Boolean,
+    isLandscape: Boolean,
     activeDoubleTap: DoubleTapRipple?,
-    activeVolume: Float?,
-    activeBrightness: Float?,
     skipIntroRange: Pair<Long, Long>?,
     skipOutroRange: Pair<Long, Long>?,
     onToggleControls: () -> Unit,
@@ -94,7 +85,7 @@ fun CrunchyrollPlayerControls(
     onSeekTo: (Long) -> Unit,
     onNextEpisode: () -> Unit,
     onToggleDub: () -> Unit,
-    onToggleZoom: () -> Unit,
+    onToggleFullscreen: () -> Unit,
     onSelectQuality: (VideoQuality?) -> Unit,
     onSelectSpeed: (Float) -> Unit,
     onSkipIntro: () -> Unit,
@@ -109,7 +100,6 @@ fun CrunchyrollPlayerControls(
     val curPos = if (isDraggingSlider) sliderDragPosition.toLong() else playerState.currentPosition
     val duration = playerState.duration.coerceAtLeast(1L)
 
-    // Check if Skip Intro or Skip Outro is active
     val showSkipIntro = skipIntroRange != null &&
             curPos >= skipIntroRange.first && curPos <= skipIntroRange.second
     val showSkipOutro = skipOutroRange != null &&
@@ -118,7 +108,7 @@ fun CrunchyrollPlayerControls(
     Box(
         modifier = modifier.fillMaxSize()
     ) {
-        // 1. Double-tap Ripple Visual
+        // Double-tap Ripple Visual
         if (activeDoubleTap != null) {
             Box(
                 modifier = Modifier
@@ -129,24 +119,7 @@ fun CrunchyrollPlayerControls(
             }
         }
 
-        // 2. Gesture Level Indicators (Brightness / Volume)
-        if (activeVolume != null) {
-            VerticalLevelIndicator(
-                icon = Icons.Default.VolumeUp,
-                level = activeVolume,
-                label = "${(activeVolume * 100).toInt()}%",
-                modifier = Modifier.align(Alignment.Center)
-            )
-        } else if (activeBrightness != null) {
-            VerticalLevelIndicator(
-                icon = Icons.Default.BrightnessMedium,
-                level = activeBrightness,
-                label = "${(activeBrightness * 100).toInt()}%",
-                modifier = Modifier.align(Alignment.Center)
-            )
-        }
-
-        // 3. Floating "Skip Intro" / "Skip Outro" Button (always visible during range even if controls are hidden)
+        // Floating "Skip Intro" / "Skip Outro" button
         if (showSkipIntro || showSkipOutro) {
             Box(
                 modifier = Modifier
@@ -165,11 +138,7 @@ fun CrunchyrollPlayerControls(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "⚡",
-                            fontSize = 14.sp,
-                            modifier = Modifier.padding(end = 6.dp)
-                        )
+                        Text(text = "⚡", fontSize = 14.sp, modifier = Modifier.padding(end = 6.dp))
                         Text(
                             text = if (showSkipIntro) "SKIP INTRO" else "SKIP OUTRO",
                             color = CrunchyOrange,
@@ -182,40 +151,32 @@ fun CrunchyrollPlayerControls(
             }
         }
 
-        // 4. Main Overlay Controls (Top Bar, Center 3-buttons, Bottom Bar)
+        // Main Controls Overlay
         AnimatedVisibility(
             visible = controlsVisible,
             enter = fadeIn(tween(250)),
             exit = fadeOut(tween(250))
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                // Top Gradient Scrim
+                // Top gradient scrim
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(110.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(PlayerTopScrim, Color.Transparent)
-                            )
-                        )
+                        .background(Brush.verticalGradient(colors = listOf(PlayerTopScrim, Color.Transparent)))
                         .align(Alignment.TopCenter)
                 )
 
-                // Bottom Gradient Scrim
+                // Bottom gradient scrim
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(130.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, PlayerBottomScrim)
-                            )
-                        )
+                        .background(Brush.verticalGradient(colors = listOf(Color.Transparent, PlayerBottomScrim)))
                         .align(Alignment.BottomCenter)
                 )
 
-                // TOP BAR: [←] "Anime Title" E5 - "Ep Name"  [SUB/DUB] [⏭ Next] [⚙] [⤢]
+                // TOP BAR: [←] Title + Ep  [SUB/DUB] [⏭] [⚙] [⤢/⛶]
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -243,7 +204,8 @@ fun CrunchyrollPlayerControls(
                             overflow = TextOverflow.Ellipsis
                         )
                         val epLabel = if (episodeNum.isNotEmpty()) "E$episodeNum" else ""
-                        val combinedSubtitle = listOf(epLabel, episodeTitle).filter { it.isNotEmpty() }.joinToString(" - ")
+                        val combinedSubtitle = listOf(epLabel, episodeTitle)
+                            .filter { it.isNotEmpty() }.joinToString(" - ")
                         if (combinedSubtitle.isNotEmpty()) {
                             Text(
                                 text = combinedSubtitle,
@@ -255,7 +217,7 @@ fun CrunchyrollPlayerControls(
                         }
                     }
 
-                    // SUB / DUB Toggle Chip
+                    // SUB / DUB Toggle
                     Surface(
                         onClick = onToggleDub,
                         shape = RoundedCornerShape(12.dp),
@@ -271,7 +233,7 @@ fun CrunchyrollPlayerControls(
                         )
                     }
 
-                    // NEXT EPISODE BUTTON (Placed beside settings as explicitly requested!)
+                    // NEXT EPISODE [⏭]
                     if (hasNextEpisode) {
                         IconButton(onClick = onNextEpisode) {
                             Icon(
@@ -283,7 +245,7 @@ fun CrunchyrollPlayerControls(
                         }
                     }
 
-                    // SETTINGS BUTTON [⚙]
+                    // SETTINGS [⚙]
                     IconButton(onClick = { showSettingsSheet = true }) {
                         Icon(
                             imageVector = Icons.Default.Settings,
@@ -292,23 +254,22 @@ fun CrunchyrollPlayerControls(
                         )
                     }
 
-                    // FULLSCREEN / FIT TOGGLE [⤢]
-                    IconButton(onClick = onToggleZoom) {
+                    // FULLSCREEN toggle: shows Fullscreen in portrait, Minimize (FullscreenExit) in landscape
+                    IconButton(onClick = onToggleFullscreen) {
                         Icon(
-                            imageVector = if (isZoomMode) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                            contentDescription = "Aspect Ratio",
+                            imageVector = if (isLandscape) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                            contentDescription = if (isLandscape) "Minimize" else "Fullscreen",
                             tint = TextPrimary
                         )
                     }
                 }
 
-                // CENTER CONTROLS: [⏪ 10]    [ ▶ / ❚❚ ]    [10 ⏩]
+                // CENTER CONTROLS: [⏪ 10]  [▶/❚❚]  [10 ⏩]
                 Row(
                     modifier = Modifier.align(Alignment.Center),
                     horizontalArrangement = Arrangement.spacedBy(36.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Rewind 10s
                     IconButton(
                         onClick = { onSeekRelative(-10_000L) },
                         modifier = Modifier
@@ -323,7 +284,6 @@ fun CrunchyrollPlayerControls(
                         )
                     }
 
-                    // Center Play/Pause / Buffering Indicator
                     if (playerState.isBuffering) {
                         CircularProgressIndicator(
                             color = CrunchyOrange,
@@ -346,7 +306,6 @@ fun CrunchyrollPlayerControls(
                         }
                     }
 
-                    // Forward 10s
                     IconButton(
                         onClick = { onSeekRelative(10_000L) },
                         modifier = Modifier
@@ -362,8 +321,7 @@ fun CrunchyrollPlayerControls(
                     }
                 }
 
-                // BOTTOM BAR: [04:12] ━━━━━●━━━━━━━━━━━━━━━━━━ [23:40]
-                // (No pause button at bottom left as explicitly requested!)
+                // BOTTOM BAR: time + seek slider + duration
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -410,7 +368,7 @@ fun CrunchyrollPlayerControls(
         }
     }
 
-    // Settings Modal Sheet (Resolution & Speed)
+    // Settings Sheet
     if (showSettingsSheet) {
         ModalBottomSheet(
             onDismissRequest = { showSettingsSheet = false },
@@ -526,59 +484,7 @@ fun SettingsSheetContent(
 }
 
 @Composable
-fun VerticalLevelIndicator(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    level: Float,
-    label: String,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = Color.Black.copy(alpha = 0.8f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = CrunchyOrange,
-                modifier = Modifier.size(32.dp)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Box(
-                modifier = Modifier
-                    .width(6.dp)
-                    .height(80.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(Color.White.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height((80 * level.coerceIn(0f, 1f)).dp)
-                        .background(CrunchyOrange)
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = label,
-                color = TextPrimary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-}
-
-@Composable
-fun DoubleTapRippleIndicator(
-    isForward: Boolean
-) {
+fun DoubleTapRippleIndicator(isForward: Boolean) {
     val animAlpha = remember { Animatable(0.7f) }
     LaunchedEffect(Unit) {
         animAlpha.animateTo(0f, animationSpec = tween(500, easing = FastOutSlowInEasing))

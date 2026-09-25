@@ -21,6 +21,7 @@ import com.shinsei.anime.data.model.AnimeRail
 data class HomeUiState(
     val isLoading: Boolean = false,
     val spotlight: AnimeCard? = null,
+    val spotlightCards: List<AnimeCard> = emptyList(),
     val rails: List<AnimeRail> = emptyList(),
     val trending: List<AnimeCard> = emptyList(),
     val searchResults: List<AnimeCard> = emptyList(),
@@ -53,9 +54,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 val parsed = parseHomeFeed(homeJsonStr)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    spotlight = parsed.first,
-                    rails = parsed.second,
-                    trending = parsed.third
+                    spotlight = parsed.spotlight,
+                    spotlightCards = parsed.spotlightCards,
+                    rails = parsed.rails,
+                    trending = parsed.trending
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -103,23 +105,42 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    private fun parseHomeFeed(jsonStr: String): Triple<AnimeCard?, List<AnimeRail>, List<AnimeCard>> {
-        if (jsonStr.isBlank()) return Triple(null, emptyList(), emptyList())
+    fun deleteSeriesProgress(animeId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.deleteByAnime(animeId)
+        }
+    }
+
+
+    private data class HomeFeedResult(
+        val spotlight: AnimeCard?,
+        val rails: List<AnimeRail>,
+        val trending: List<AnimeCard>,
+        val spotlightCards: List<AnimeCard>
+    )
+
+    private fun parseHomeFeed(jsonStr: String): HomeFeedResult {
+        if (jsonStr.isBlank()) return HomeFeedResult(null, emptyList(), emptyList(), emptyList())
         try {
             val root = JSONObject(jsonStr)
             var spotlightCard: AnimeCard? = null
+            val allSpotlightCards = mutableListOf<AnimeCard>()
             val spotlightArr = root.optJSONArray("spotlight")
             if (spotlightArr != null && spotlightArr.length() > 0) {
-                val obj = spotlightArr.getJSONObject(0)
-                val id = obj.optString("id", "")
-                if (id.isNotEmpty()) {
-                    spotlightCard = AnimeCard(
-                        id = id,
-                        title = obj.optString("title", "Featured Anime"),
-                        poster = obj.optString("poster", obj.optString("backdrop", "")),
-                        score = obj.optString("score", ""),
-                        type = obj.optString("type", "TV")
-                    )
+                for (si in 0 until minOf(spotlightArr.length(), 6)) {
+                    val obj = spotlightArr.getJSONObject(si)
+                    val id = obj.optString("id", "")
+                    if (id.isNotEmpty()) {
+                        val card = AnimeCard(
+                            id = id,
+                            title = obj.optString("title", "Featured Anime"),
+                            poster = obj.optString("poster", obj.optString("backdrop", "")),
+                            score = obj.optString("score", ""),
+                            type = obj.optString("type", "TV")
+                        )
+                        allSpotlightCards.add(card)
+                        if (si == 0) spotlightCard = card
+                    }
                 }
             }
 
@@ -179,12 +200,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            return Triple(spotlightCard, railsList, flatCards)
+            // Build carousel: use real spotlight items if >= 2, else synthesise from rails
+            val carouselCards = if (allSpotlightCards.size >= 2) {
+                allSpotlightCards
+            } else {
+                val synthList = mutableListOf<AnimeCard>()
+                if (spotlightCard != null) synthList.add(spotlightCard)
+                for (rail in railsList.take(3)) {
+                    rail.items.firstOrNull()?.let { c ->
+                        if (synthList.none { it.id == c.id }) synthList.add(c)
+                    }
+                }
+                synthList
+            }
+
+            return HomeFeedResult(spotlightCard, railsList, flatCards, carouselCards)
         } catch (e: Exception) {
             val fallbackCards = parseAnimeCards(jsonStr)
-            return Triple(fallbackCards.firstOrNull(), emptyList(), fallbackCards)
+            return HomeFeedResult(fallbackCards.firstOrNull(), emptyList(), fallbackCards, fallbackCards.take(4))
         }
     }
+
 
     private fun parseAnimeCards(jsonStr: String): List<AnimeCard> {
         val list = mutableListOf<AnimeCard>()

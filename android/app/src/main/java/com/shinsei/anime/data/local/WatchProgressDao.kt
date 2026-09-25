@@ -32,4 +32,7 @@ interface WatchProgressDao {
 
     @Query("DELETE FROM watch_progress WHERE animeId = :animeId AND epId = :epId")
     suspend fun delete(animeId: String, epId: String)
+
+    @Query("DELETE FROM watch_progress WHERE animeId = :animeId")
+    suspend fun deleteByAnime(animeId: String)
 }

@@ -1,8 +1,10 @@
 package com.shinsei.anime.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,12 +18,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -31,6 +36,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,9 +44,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,6 +59,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,6 +78,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Sync
 import com.shinsei.anime.ui.theme.TextPrimary
 import com.shinsei.anime.ui.theme.TextSecondary
+
 
 @Composable
 fun HomeScreen(
@@ -197,39 +209,77 @@ fun HomeScreen(
             MainCatalogFeed(
                 continueWatching = continueWatching,
                 spotlight = uiState.spotlight,
+                spotlightCards = uiState.spotlightCards,
                 rails = uiState.rails,
                 trending = uiState.trending,
                 onAnimeClick = onNavigateToDetail,
-                onPlayProgress = onPlayProgress
+                onPlayProgress = onPlayProgress,
+                onDeleteSeries = { animeId -> viewModel.deleteSeriesProgress(animeId) }
             )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MainCatalogFeed(
     continueWatching: List<WatchProgressEntity>,
     spotlight: AnimeCard?,
+    spotlightCards: List<AnimeCard>,
     rails: List<com.shinsei.anime.data.model.AnimeRail>,
     trending: List<AnimeCard>,
     onAnimeClick: (String) -> Unit,
-    onPlayProgress: (WatchProgressEntity) -> Unit
+    onPlayProgress: (WatchProgressEntity) -> Unit,
+    onDeleteSeries: (String) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        // Spotlight Hero Banner
-        if (spotlight != null) {
+        // ── Spotlight Carousel (HorizontalPager) ──
+        val carouselItems = if (spotlightCards.isNotEmpty()) spotlightCards
+                            else if (spotlight != null) listOf(spotlight) else emptyList()
+        if (carouselItems.isNotEmpty()) {
             item {
-                FeaturedSpotlightBanner(
-                    anime = spotlight,
-                    onWatchClick = { onAnimeClick(spotlight.id) }
-                )
+                val pagerState = rememberPagerState(pageCount = { carouselItems.size })
+                Column {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { page ->
+                        val card = carouselItems[page]
+                        FeaturedSpotlightBanner(
+                            anime = card,
+                            onWatchClick = { onAnimeClick(card.id) }
+                        )
+                    }
+
+                    // Dot indicators
+                    if (carouselItems.size > 1) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight()
+                                .padding(top = 6.dp, bottom = 2.dp),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            repeat(carouselItems.size) { idx ->
+                                val selected = pagerState.currentPage == idx
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 3.dp)
+                                        .size(if (selected) 8.dp else 5.dp)
+                                        .clip(CircleShape)
+                                        .background(if (selected) CrunchyOrange else Color.White.copy(alpha = 0.35f))
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        // Continue Watching Shelf (Only single latest episode per series)
+        // ── Continue Watching Shelf ──
         if (continueWatching.isNotEmpty()) {
             item {
                 Text(
@@ -247,13 +297,17 @@ fun MainCatalogFeed(
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     items(continueWatching, key = { it.animeId }) { item ->
-                        ContinueWatchingCard(item = item, onClick = { onPlayProgress(item) })
+                        ContinueWatchingCard(
+                            item = item,
+                            onClick = { onPlayProgress(item) },
+                            onLongClick = { onDeleteSeries(item.animeId) }
+                        )
                     }
                 }
             }
         }
 
-        // Curated Rails (Spotlight, Trending, Most Popular, Top Airing)
+        // ── Curated Rails ──
         if (rails.isNotEmpty()) {
             for (rail in rails) {
                 item {
@@ -280,7 +334,6 @@ fun MainCatalogFeed(
                 }
             }
         } else {
-            // Trending / Catalog Grid Header
             item {
                 Text(
                     text = "Trending & Popular Anime",
@@ -291,7 +344,6 @@ fun MainCatalogFeed(
                 )
             }
 
-            // 3-Column Catalog Grid
             val chunked = trending.chunked(3)
             items(chunked) { rowItems ->
                 Row(
@@ -314,6 +366,7 @@ fun MainCatalogFeed(
         }
     }
 }
+
 
 @Composable
 fun FeaturedSpotlightBanner(
@@ -419,22 +472,58 @@ fun FeaturedSpotlightBanner(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ContinueWatchingCard(
     item: WatchProgressEntity,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
     val progressFraction = if (item.duration > 0) {
         (item.position / item.duration).toFloat().coerceIn(0f, 1f)
     } else 0f
 
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Remove from Continue Watching?", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "This will remove all watch history for \"${item.animeTitle}\".",
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    onLongClick()
+                }) {
+                    Text("Remove", color = CrunchyOrange, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+            containerColor = SurfaceDark
+        )
+    }
+
     Surface(
-        onClick = onClick,
         shape = RoundedCornerShape(10.dp),
         color = SurfaceDark,
         border = androidx.compose.foundation.BorderStroke(1.dp, SurfaceBorder),
-        modifier = Modifier.width(160.dp)
+        modifier = Modifier
+            .width(160.dp)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = { showDeleteDialog = true }
+            )
     ) {
+
         Column {
             Box(
                 modifier = Modifier
