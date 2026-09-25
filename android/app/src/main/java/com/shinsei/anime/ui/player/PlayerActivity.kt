@@ -117,9 +117,19 @@ class PlayerActivity : ComponentActivity() {
         lifecycleScope.launch {
             try {
                 val app = ShinseiApp.instance
-                // Check if existing saved progress
                 val existing = app.database.watchProgressDao().getProgress(animeId, epId)
                 val initialPosMs = ((existing?.position ?: 0.0) * 1000).toLong()
+
+                // Check if already downloaded for offline playback
+                val downloaded = app.database.downloadDao().getDownload(animeId, epId)
+                if (downloaded != null && downloaded.status == com.shinsei.anime.data.local.DownloadEntity.STATUS_COMPLETED && java.io.File(downloaded.localPath).exists()) {
+                    android.util.Log.d("PlayerActivity", "Playing offline downloaded episode from ${downloaded.localPath}")
+                    media3Manager.prepareMedia(
+                        url = downloaded.localPath,
+                        initialPositionMs = initialPosMs
+                    )
+                    return@launch
+                }
 
                 // Resolve Kyoto stream m3u8
                 val streamJsonStr = app.scriptRunner.resolveKyotoStream(
@@ -140,14 +150,17 @@ class PlayerActivity : ComponentActivity() {
                 }
 
                 if (streamUrl.isNotEmpty()) {
-                    media3Manager.prepareHlsStream(
-                        m3u8Url = streamUrl,
+                    media3Manager.prepareMedia(
+                        url = streamUrl,
                         headers = headersMap,
                         initialPositionMs = initialPosMs
                     )
+                } else {
+                    android.widget.Toast.makeText(this@PlayerActivity, "Stream unavailable for episode $epNum", android.widget.Toast.LENGTH_LONG).show()
                 }
             } catch (e: Exception) {
-                // ignore
+                android.util.Log.e("PlayerActivity", "Playback resolution error", e)
+                android.widget.Toast.makeText(this@PlayerActivity, "Playback error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
             }
         }
     }

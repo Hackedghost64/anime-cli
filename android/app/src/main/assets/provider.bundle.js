@@ -45,35 +45,106 @@
     }
   }
 
+  const postCache = new Map();
+
   /**
    * 1. Home Feed Spotlight and Curated Rails
    */
   exports.getHomeFeed = async function() {
     try {
       const data = await requestJson(`${ANILAB_BASE}/home`, { headers: DEFAULT_HEADERS });
-      const spotlight = (data.spotlight || data.data?.spotlight || []).map(item => ({
-        id: String(item.id || item.post_id),
-        title: item.title || item.name || "Featured Anime",
-        poster: item.poster || item.image || "",
-        backdrop: item.backdrop || item.banner || item.poster || "",
-        synopsis: item.synopsis || item.description || "",
-        genres: Array.isArray(item.genres) ? item.genres : []
-      }));
-
+      const spotlight = [];
       const rails = [];
-      if (Array.isArray(data.trending || data.data?.trending)) {
-        rails.push({
-          title: "Trending Now",
-          items: (data.trending || data.data.trending).map(formatAnimeItem)
+
+      // 1. Featured Spotlight Banner
+      if (data.featured && (data.featured.id || data.featured.title)) {
+        const feat = data.featured;
+        postCache.set(String(feat.id), feat);
+        spotlight.push({
+          id: String(feat.id),
+          title: feat.title || "Featured Anime",
+          poster: feat.poster || "",
+          backdrop: feat.backdrop || feat.banner || feat.poster || "",
+          synopsis: feat.synopsis || feat.overview || "",
+          score: feat.score || feat.rating || "",
+          type: feat.type || "TV",
+          genres: typeof feat.genres === 'string' ? feat.genres.split(',').map(s => s.trim()) : (Array.isArray(feat.genres) ? feat.genres : [])
         });
       }
-      if (Array.isArray(data.latest || data.data?.latest)) {
-        rails.push({
-          title: "Top Airing Releases",
-          items: (data.latest || data.data.latest).map(formatAnimeItem)
+
+      // 2. Sections (Spotlight, Trending, Most Popular, Top Airing, etc.)
+      const sections = Array.isArray(data.sections) ? data.sections : [];
+      
+      // Collect IDs to hydrate in parallel (up to 20 unique items across sections)
+      const idsToHydrate = [];
+      for (const sec of sections) {
+        for (const p of (sec.posts || []).slice(0, 8)) {
+          const pid = String(p.id);
+          if (pid && !postCache.has(pid) && !idsToHydrate.includes(pid)) {
+            idsToHydrate.push(pid);
+          }
+        }
+      }
+
+      // Parallel hydrate batch
+      if (idsToHydrate.length > 0) {
+        await Promise.allSettled(idsToHydrate.map(async id => {
+          try {
+            const pData = await exports.getPost(id);
+            if (pData && pData.title) {
+              postCache.set(id, pData);
+            }
+          } catch {}
+        }));
+      }
+
+      for (const sec of sections) {
+        const posts = (sec.posts || []).map(p => {
+          const cached = postCache.get(String(p.id));
+          return {
+            id: String(p.id),
+            title: cached?.title || p.title || p.name || "",
+            poster: p.poster || cached?.poster || "",
+            score: cached?.rating || p.score || "",
+            type: cached?.type || p.type || "TV"
+          };
+        }).filter(p => p.id && (p.poster || p.title));
+
+        if (posts.length > 0) {
+          rails.push({
+            title: sec.name || "Curated Anime",
+            items: posts
+          });
+        }
+      }
+
+      // If spotlight had none, populate from first rail
+      if (spotlight.length === 0 && rails.length > 0 && rails[0].items.length > 0) {
+        const first = rails[0].items[0];
+        spotlight.push({
+          id: first.id,
+          title: first.title,
+          poster: first.poster,
+          backdrop: first.poster,
+          synopsis: "",
+          score: first.score,
+          type: first.type,
+          genres: []
         });
       }
-      const items = (rails[0] && rails[0].items && rails[0].items.length) ? rails[0].items : spotlight;
+
+      // Combined flat items list for consumers that expect flat items array
+      const items = [];
+      const seenIds = new Set();
+      for (const rail of rails) {
+        for (const item of rail.items) {
+          if (!seenIds.has(item.id)) {
+            seenIds.add(item.id);
+            items.push(item);
+          }
+        }
+      }
+
       return { spotlight, rails, items };
     } catch (err) {
       return { spotlight: [], rails: [], items: [] };
@@ -123,22 +194,26 @@
    */
   exports.getPost = async function(postId) {
     if (!postId) return null;
+    const key = String(postId);
+    if (postCache.has(key)) return postCache.get(key);
     try {
       const data = await requestJson(`${ANILAB_BASE}/post?id=${encodeURIComponent(postId)}`, {
         headers: DEFAULT_HEADERS
       });
       const p = data.data || data;
-      return {
+      const res = {
         id: String(p.id || postId),
         title: p.title || p.name || p.english || "Unknown Title",
         poster: p.poster || p.image || "",
         backdrop: p.backdrop || p.banner || p.poster || "",
-        synopsis: p.synopsis || p.description || "",
+        synopsis: p.synopsis || p.description || p.overview || "",
         rating: p.score || p.rating || "N/A",
         year: p.year || "",
-        genres: Array.isArray(p.genres) ? p.genres : [],
+        genres: typeof p.genres === 'string' ? p.genres.split(',').map(s => s.trim()) : (Array.isArray(p.genres) ? p.genres : []),
         type: p.type || "TV"
       };
+      postCache.set(key, res);
+      return res;
     } catch (err) {
       return null;
     }
@@ -244,7 +319,7 @@
     if (!episodes.length) throw new Error("No episodes found for anime " + animeId);
 
     const ep = episodes.find(e => String(e.num) === String(epNum)) || episodes[0];
-    const servers = await exports.getServers(ep.id);
+    const servers = await exports.getServers(animeId, ep.id);
 
     let chosenServer = null;
     if (dub) {

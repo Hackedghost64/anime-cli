@@ -16,8 +16,12 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
+import com.shinsei.anime.data.model.AnimeRail
+
 data class HomeUiState(
     val isLoading: Boolean = false,
+    val spotlight: AnimeCard? = null,
+    val rails: List<AnimeRail> = emptyList(),
     val trending: List<AnimeCard> = emptyList(),
     val searchResults: List<AnimeCard> = emptyList(),
     val isSearching: Boolean = false,
@@ -31,7 +35,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val scriptRunner = app.scriptRunner
     private val dao = app.database.watchProgressDao()
 
-    val continueWatching: StateFlow<List<WatchProgressEntity>> = dao.observeAllProgress()
+    val continueWatching: StateFlow<List<WatchProgressEntity>> = dao.observeLatestPerSeries()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -46,10 +50,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
                 val homeJsonStr = scriptRunner.getHome()
-                val cards = parseAnimeCards(homeJsonStr)
+                val parsed = parseHomeFeed(homeJsonStr)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    trending = cards
+                    spotlight = parsed.first,
+                    rails = parsed.second,
+                    trending = parsed.third
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -97,6 +103,89 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    private fun parseHomeFeed(jsonStr: String): Triple<AnimeCard?, List<AnimeRail>, List<AnimeCard>> {
+        if (jsonStr.isBlank()) return Triple(null, emptyList(), emptyList())
+        try {
+            val root = JSONObject(jsonStr)
+            var spotlightCard: AnimeCard? = null
+            val spotlightArr = root.optJSONArray("spotlight")
+            if (spotlightArr != null && spotlightArr.length() > 0) {
+                val obj = spotlightArr.getJSONObject(0)
+                val id = obj.optString("id", "")
+                if (id.isNotEmpty()) {
+                    spotlightCard = AnimeCard(
+                        id = id,
+                        title = obj.optString("title", "Featured Anime"),
+                        poster = obj.optString("poster", obj.optString("backdrop", "")),
+                        score = obj.optString("score", ""),
+                        type = obj.optString("type", "TV")
+                    )
+                }
+            }
+
+            val railsList = mutableListOf<AnimeRail>()
+            val railsArr = root.optJSONArray("rails")
+            if (railsArr != null) {
+                for (r in 0 until railsArr.length()) {
+                    val rObj = railsArr.getJSONObject(r)
+                    val rTitle = rObj.optString("title", "Curated")
+                    val itemsArr = rObj.optJSONArray("items") ?: JSONArray()
+                    val railCards = mutableListOf<AnimeCard>()
+                    for (i in 0 until itemsArr.length()) {
+                        val itemObj = itemsArr.getJSONObject(i)
+                        val id = itemObj.optString("id", "")
+                        val title = itemObj.optString("title", "")
+                        val poster = itemObj.optString("poster", "")
+                        if (id.isNotEmpty() && (poster.isNotEmpty() || title.isNotEmpty())) {
+                            railCards.add(AnimeCard(
+                                id = id,
+                                title = if (title.isNotEmpty()) title else "Anime",
+                                poster = poster,
+                                score = itemObj.optString("score", ""),
+                                type = itemObj.optString("type", "TV")
+                            ))
+                        }
+                    }
+                    if (railCards.isNotEmpty()) {
+                        railsList.add(AnimeRail(title = rTitle, items = railCards))
+                    }
+                }
+            }
+
+            val flatCards = mutableListOf<AnimeCard>()
+            val itemsArr = root.optJSONArray("items")
+            if (itemsArr != null) {
+                for (i in 0 until itemsArr.length()) {
+                    val obj = itemsArr.getJSONObject(i)
+                    val id = obj.optString("id", "")
+                    val title = obj.optString("title", "")
+                    val poster = obj.optString("poster", "")
+                    if (id.isNotEmpty() && (poster.isNotEmpty() || title.isNotEmpty())) {
+                        flatCards.add(AnimeCard(
+                            id = id,
+                            title = if (title.isNotEmpty()) title else "Anime",
+                            poster = poster,
+                            score = obj.optString("score", ""),
+                            type = obj.optString("type", "TV")
+                        ))
+                    }
+                }
+            } else if (railsList.isNotEmpty()) {
+                val seen = mutableSetOf<String>()
+                for (rail in railsList) {
+                    for (card in rail.items) {
+                        if (seen.add(card.id)) flatCards.add(card)
+                    }
+                }
+            }
+
+            return Triple(spotlightCard, railsList, flatCards)
+        } catch (e: Exception) {
+            val fallbackCards = parseAnimeCards(jsonStr)
+            return Triple(fallbackCards.firstOrNull(), emptyList(), fallbackCards)
+        }
+    }
+
     private fun parseAnimeCards(jsonStr: String): List<AnimeCard> {
         val list = mutableListOf<AnimeCard>()
         if (jsonStr.isBlank()) return list
@@ -129,8 +218,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 val poster = obj.optString("poster", "")
                 val score = obj.optString("score", "")
                 val type = obj.optString("type", "TV")
-                if (id.isNotEmpty() && title.isNotEmpty()) {
-                    list.add(AnimeCard(id = id, title = title, poster = poster, score = score, type = type))
+                if (id.isNotEmpty() && (title.isNotEmpty() || poster.isNotEmpty())) {
+                    list.add(AnimeCard(
+                        id = id,
+                        title = if (title.isNotEmpty()) title else "Anime",
+                        poster = poster,
+                        score = score,
+                        type = type
+                    ))
                 }
             }
         } catch (e: Exception) {

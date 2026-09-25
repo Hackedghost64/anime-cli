@@ -25,6 +25,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -86,6 +88,11 @@ fun DetailScreen(
 
     val uiState by viewModel.uiState.collectAsState()
     var isDubSelected by remember { mutableStateOf(false) }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val app = context.applicationContext as com.shinsei.anime.ShinseiApp
+    val downloadManager = remember { com.shinsei.anime.data.download.DownloadManager.getInstance(context) }
+    val episodeDownloads by app.database.downloadDao().observeDownloadsForAnime(animeId).collectAsState(initial = emptyList())
 
     if (uiState.isLoading) {
         Box(
@@ -384,6 +391,52 @@ fun DetailScreen(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
                         )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Offline Download Action / Status
+                    val dl = episodeDownloads.find { it.epId == ep.id }
+                    when {
+                        dl?.status == com.shinsei.anime.data.local.DownloadEntity.STATUS_COMPLETED -> {
+                            Icon(
+                                imageVector = Icons.Default.DownloadDone,
+                                contentDescription = "Downloaded Offline",
+                                tint = CrunchyOrange,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        dl?.status == com.shinsei.anime.data.local.DownloadEntity.STATUS_DOWNLOADING -> {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = CrunchyOrange,
+                                strokeWidth = 2.dp
+                            )
+                        }
+                        else -> {
+                            IconButton(
+                                onClick = {
+                                    downloadManager.enqueueDownload(
+                                        animeId = animeId,
+                                        animeTitle = detail.title,
+                                        animePoster = detail.poster,
+                                        epId = ep.id,
+                                        epNum = ep.num,
+                                        epName = ep.name,
+                                        isDub = isDubSelected
+                                    )
+                                    android.widget.Toast.makeText(context, "Downloading Ep ${ep.num} in background", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = "Download Episode",
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }

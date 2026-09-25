@@ -105,32 +105,50 @@ class Media3Manager(
         return player
     }
 
-    fun prepareHlsStream(
-        m3u8Url: String,
+    fun prepareMedia(
+        url: String,
         headers: Map<String, String> = emptyMap(),
         initialPositionMs: Long = 0L
     ) {
         val player = getPlayer()
 
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15000)
-            .setReadTimeoutMs(15000)
+        if (url.startsWith("/") || url.startsWith("file://") || !url.startsWith("http")) {
+            val uri = if (url.startsWith("file://")) Uri.parse(url) else Uri.fromFile(java.io.File(url))
+            val mediaItem = MediaItem.fromUri(uri)
+            player.setMediaItem(mediaItem)
+        } else {
+            val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(15000)
+                .setReadTimeoutMs(15000)
 
-        if (headers.isNotEmpty()) {
-            httpDataSourceFactory.setDefaultRequestProperties(headers)
+            val ua = headers["User-Agent"] ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+            httpDataSourceFactory.setUserAgent(ua)
+
+            if (headers.isNotEmpty()) {
+                httpDataSourceFactory.setDefaultRequestProperties(headers)
+            }
+
+            val hlsMediaSource: MediaSource = HlsMediaSource.Factory(httpDataSourceFactory)
+                .setAllowChunklessPreparation(true)
+                .createMediaSource(MediaItem.fromUri(Uri.parse(url)))
+
+            player.setMediaSource(hlsMediaSource)
         }
 
-        val hlsMediaSource: MediaSource = HlsMediaSource.Factory(httpDataSourceFactory)
-            .setAllowChunklessPreparation(true)
-            .createMediaSource(MediaItem.fromUri(Uri.parse(m3u8Url)))
-
-        player.setMediaSource(hlsMediaSource)
         player.prepare()
         if (initialPositionMs > 1000L) {
             player.seekTo(initialPositionMs)
         }
         player.playWhenReady = true
+    }
+
+    fun prepareHlsStream(
+        m3u8Url: String,
+        headers: Map<String, String> = emptyMap(),
+        initialPositionMs: Long = 0L
+    ) {
+        prepareMedia(m3u8Url, headers, initialPositionMs)
     }
 
     private fun startProgressUpdates(player: ExoPlayer) {

@@ -25,3 +25,8 @@ data class EpisodeItem(
     val name: String = "",
     val duration: String = ""
 )
+
+data class AnimeRail(
+    val title: String,
+    val items: List<AnimeCard>
+)

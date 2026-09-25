@@ -458,14 +458,13 @@ def cmd_sync(port: int = 8088):
     token = secrets.token_urlsafe(16)
     qr_payload = f"shinsei://sync?host={local_ip}&port={port}&token={token}"
 
-    print(f"{C_BOLD}⚡ P2P MOBILE SYNC & INITIALIZATION (Shinsei Android App){C_RESET}")
+    print(f"{C_BOLD}⚡ P2P MOBILE WATCH HISTORY SYNC (Shinsei Android App){C_RESET}")
     print(f"  • {C_BOLD}Server Address:{C_RESET} http://{local_ip}:{port}")
     print(f"  • {C_BOLD}Auth Token:{C_RESET}     {token}")
-    print(f"  • {C_DIM}Run this command anytime using: {C_BOLD}anime-cli -s{C_RESET}")
-    print(f"  • {C_DIM}Connect your phone to the same Wi-Fi network as this PC.{C_RESET}")
-    print(f"  • {C_DIM}Firewall tip: If connection fails, allow port {port}: sudo ufw allow {port}/tcp{C_RESET}\n")
+    print(f"  • {C_DIM}Run this command anytime using: {C_BOLD}anime-cli -s{C_RESET} or {C_BOLD}anime-cli sync{C_RESET}")
+    print(f"  • {C_DIM}Connect your phone to the same Wi-Fi network as this PC.{C_RESET}\n")
 
-    print(f"{C_ORANGE}Scan this QR code with the Shinsei Android app camera:{C_RESET}")
+    print(f"{C_ORANGE}Scan this QR code with the Shinsei Android app (Sync Tab or SYNC button):{C_RESET}")
     print_qr_code(qr_payload)
 
     sync_done_event = threading.Event()
@@ -491,46 +490,10 @@ def cmd_sync(port: int = 8088):
         server.should_exit = True
         time.sleep(0.3)
 
-# -----------------------------------------------------------------------------
-# COMMAND: init (Serve provider.bundle.js for Mobile App Initialization)
-# -----------------------------------------------------------------------------
 def cmd_init(port: int = 8088):
-    import secrets
-    import uvicorn
-
-    banner()
-    local_ip = get_local_ip()
-    token = secrets.token_urlsafe(16)
-    script_url = f"http://{local_ip}:{port}/provider.bundle.js"
-    qr_payload = f"shinsei://init?url={script_url}&host={local_ip}&port={port}&token={token}"
-
-    print(f"{C_BOLD}🚀 SHINSEI RUNNER INITIALIZATION SERVER{C_RESET}")
-    print(f"  • {C_BOLD}Direct Script URL:{C_RESET} {C_CYAN}{script_url}{C_RESET}")
-    print(f"  • {C_BOLD}Auth Token:{C_RESET}        {token}")
-    print(f"  • {C_DIM}Run this command anytime using: {C_BOLD}anime-cli init{C_RESET}")
-    print(f"  • {C_DIM}Paste this URL into the app's [INIT] tab, or scan this QR code:{C_RESET}\n")
-
-    print_qr_code(qr_payload)
-
-    sync_done_event = threading.Event()
-    sync_stats = {"received": 0, "sent": 0}
-    sync_app = create_sync_app(token, sync_done_event, sync_stats)
-
-    config = uvicorn.Config(sync_app, host="0.0.0.0", port=port, log_level="warning")
-    server = uvicorn.Server(config)
-    server_thread = threading.Thread(target=server.run, daemon=True)
-    server_thread.start()
-
-    print(f"{C_CYAN}Serving provider.bundle.js for mobile app initialization (Ctrl+C to stop)...{C_RESET}")
-    try:
-        while not sync_done_event.is_set():
-            time.sleep(0.2)
-        print(f"\n{C_GREEN}{C_BOLD}✓ Mobile App Initialized Successfully!{C_RESET}\n")
-    except KeyboardInterrupt:
-        print("\nServer stopped.")
-    finally:
-        server.should_exit = True
-        time.sleep(0.3)
+    print(f"\n{C_GOLD}Note: Mobile app initialization is automatic! The Android app works completely out-of-the-box.{C_RESET}")
+    print(f"{C_CYAN}Starting P2P watch history synchronization instead...{C_RESET}\n")
+    cmd_sync(port=port)
 
 # -----------------------------------------------------------------------------
 # COMMAND: terminal player (The 10x better ani-cli)

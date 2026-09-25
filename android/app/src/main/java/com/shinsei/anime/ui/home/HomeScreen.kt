@@ -73,8 +73,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onNavigateToDetail: (String) -> Unit,
     onPlayProgress: (WatchProgressEntity) -> Unit,
-    onOpenSyncSheet: () -> Unit,
-    onOpenInitSheet: () -> Unit
+    onOpenSyncSheet: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val continueWatching by viewModel.continueWatching.collectAsState()
@@ -112,63 +111,30 @@ fun HomeScreen(
                 )
             }
 
-            // Two Action Buttons: SYNC and INIT
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // Top SYNC Button
+            Surface(
+                onClick = onOpenSyncSheet,
+                shape = RoundedCornerShape(12.dp),
+                color = SurfaceElevated,
+                border = androidx.compose.foundation.BorderStroke(1.dp, CrunchyOrange)
             ) {
-                // 1. SYNC Button (PC Watch History Sync)
-                Surface(
-                    onClick = onOpenSyncSheet,
-                    shape = RoundedCornerShape(12.dp),
-                    color = SurfaceElevated,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CrunchyOrange)
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Sync,
-                            contentDescription = "Sync",
-                            tint = CrunchyOrange,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "SYNC",
-                            color = CrunchyOrange,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-
-                // 2. INIT Button (Runner Script Setup & Cloud URL)
-                Surface(
-                    onClick = onOpenInitSheet,
-                    shape = RoundedCornerShape(12.dp),
-                    color = CrunchyOrange,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CrunchyOrange)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CloudDownload,
-                            contentDescription = "Initialize",
-                            tint = Color.Black,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "INIT",
-                            color = Color.Black,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 11.sp
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Sync,
+                        contentDescription = "Sync",
+                        tint = CrunchyOrange,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "SYNC",
+                        color = CrunchyOrange,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
+                    )
                 }
             }
         }
@@ -230,6 +196,8 @@ fun HomeScreen(
             // Main Catalog Feed with Continue Watching Shelf
             MainCatalogFeed(
                 continueWatching = continueWatching,
+                spotlight = uiState.spotlight,
+                rails = uiState.rails,
                 trending = uiState.trending,
                 onAnimeClick = onNavigateToDetail,
                 onPlayProgress = onPlayProgress
@@ -241,6 +209,8 @@ fun HomeScreen(
 @Composable
 fun MainCatalogFeed(
     continueWatching: List<WatchProgressEntity>,
+    spotlight: AnimeCard?,
+    rails: List<com.shinsei.anime.data.model.AnimeRail>,
     trending: List<AnimeCard>,
     onAnimeClick: (String) -> Unit,
     onPlayProgress: (WatchProgressEntity) -> Unit
@@ -249,7 +219,17 @@ fun MainCatalogFeed(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        // Continue Watching Shelf
+        // Spotlight Hero Banner
+        if (spotlight != null) {
+            item {
+                FeaturedSpotlightBanner(
+                    anime = spotlight,
+                    onWatchClick = { onAnimeClick(spotlight.id) }
+                )
+            }
+        }
+
+        // Continue Watching Shelf (Only single latest episode per series)
         if (continueWatching.isNotEmpty()) {
             item {
                 Text(
@@ -266,42 +246,173 @@ fun MainCatalogFeed(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(continueWatching) { item ->
+                    items(continueWatching, key = { it.animeId }) { item ->
                         ContinueWatchingCard(item = item, onClick = { onPlayProgress(item) })
                     }
                 }
             }
         }
 
-        // Trending / Catalog Grid Header
-        item {
-            Text(
-                text = "Trending & Popular Anime",
-                color = TextPrimary,
-                fontWeight = FontWeight.Bold,
-                fontSize = 17.sp,
-                modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 12.dp)
-            )
-        }
+        // Curated Rails (Spotlight, Trending, Most Popular, Top Airing)
+        if (rails.isNotEmpty()) {
+            for (rail in rails) {
+                item {
+                    Text(
+                        text = rail.title,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp,
+                        modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 12.dp)
+                    )
+                }
 
-        // 3-Column Catalog Grid
-        val chunked = trending.chunked(3)
-        items(chunked) { rowItems ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                for (card in rowItems) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        AnimeCardItem(card = card, onClick = { onAnimeClick(card.id) })
+                item {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(rail.items, key = { it.id + "_" + rail.title }) { card ->
+                            Box(modifier = Modifier.width(115.dp)) {
+                                AnimeCardItem(card = card, onClick = { onAnimeClick(card.id) })
+                            }
+                        }
                     }
                 }
-                // Fill empty slots if last row has less than 3 items
-                val emptySlots = 3 - rowItems.size
-                for (i in 0 until emptySlots) {
-                    Spacer(modifier = Modifier.weight(1f))
+            }
+        } else {
+            // Trending / Catalog Grid Header
+            item {
+                Text(
+                    text = "Trending & Popular Anime",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 12.dp)
+                )
+            }
+
+            // 3-Column Catalog Grid
+            val chunked = trending.chunked(3)
+            items(chunked) { rowItems ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    for (card in rowItems) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            AnimeCardItem(card = card, onClick = { onAnimeClick(card.id) })
+                        }
+                    }
+                    val emptySlots = 3 - rowItems.size
+                    for (i in 0 until emptySlots) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FeaturedSpotlightBanner(
+    anime: AnimeCard,
+    onWatchClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(200.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(SurfaceDark)
+            .clickable(onClick = onWatchClick)
+    ) {
+        AsyncImage(
+            model = anime.poster,
+            contentDescription = anime.title,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.5f),
+                            Color.Black.copy(alpha = 0.95f)
+                        )
+                    )
+                )
+        )
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(14.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = CrunchyOrange,
+                modifier = Modifier.padding(bottom = 6.dp)
+            ) {
+                Text(
+                    text = "FEATURED SPOTLIGHT",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+
+            Text(
+                text = anime.title,
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Black,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = CrunchyOrange
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.Black,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "WATCH NOW",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                if (anime.score.isNotEmpty()) {
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "★ ${anime.score}",
+                        color = AmberGlow,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
                 }
             }
         }
