@@ -106,6 +106,28 @@ class DownloadManager private constructor(private val context: Context) {
         }
     }
 
+    fun queueBatchDownloads(
+        animeId: String,
+        animeTitle: String,
+        animePoster: String,
+        episodes: List<Pair<String, String>>,
+        isDub: Boolean = false
+    ) {
+        scope.launch {
+            for ((epId, epNum) in episodes) {
+                enqueueDownload(
+                    animeId = animeId,
+                    epId = epId,
+                    epNum = epNum,
+                    epName = "Episode $epNum",
+                    animeTitle = animeTitle,
+                    animePoster = animePoster,
+                    isDub = isDub
+                )
+            }
+        }
+    }
+
     private fun processNextDownload(downloadId: String, isDub: Boolean) {
         if (activeJobs.containsKey(downloadId)) return
 
@@ -304,17 +326,22 @@ class DownloadManager private constructor(private val context: Context) {
         cancelledIds.add(downloadId)
         activeJobs[downloadId]?.cancel()
         activeJobs.remove(downloadId)
+        if (_currentDownload.value?.id == downloadId) {
+            _currentDownload.value = null
+        }
         scope.launch {
             val entity = downloadDao.getDownload(downloadId)
             if (entity != null) {
                 File(entity.localPath + ".tmp").delete()
-                downloadDao.updateStatus(downloadId, DownloadEntity.STATUS_CANCELLED)
+                File(entity.localPath).delete()
+                downloadDao.deleteById(downloadId)
             }
         }
     }
 
     fun deleteDownload(downloadId: String) {
         cancelDownload(downloadId)
+        _currentDownload.value = null
         scope.launch {
             val entity = downloadDao.getDownload(downloadId)
             if (entity != null) {

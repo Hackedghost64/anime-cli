@@ -31,8 +31,10 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -66,7 +68,7 @@ import com.shinsei.anime.ui.theme.TextMuted
 import com.shinsei.anime.ui.theme.TextPrimary
 import com.shinsei.anime.ui.theme.TextSecondary
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(
     animeId: String,
@@ -88,6 +90,7 @@ fun DetailScreen(
 
     val uiState by viewModel.uiState.collectAsState()
     var isDubSelected by remember { mutableStateOf(false) }
+    var showBatchDownloadSheet by remember { mutableStateOf(false) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val app = context.applicationContext as com.shinsei.anime.ShinseiApp
@@ -302,12 +305,47 @@ fun DetailScreen(
 
                 // Episodes Section Header
                 Spacer(modifier = Modifier.height(24.dp))
-                Text(
-                    text = "Episodes (${uiState.episodes.size})",
-                    color = TextPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Episodes (${uiState.episodes.size})",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp
+                    )
+
+                    if (uiState.episodes.isNotEmpty()) {
+                        Surface(
+                            onClick = { showBatchDownloadSheet = true },
+                            shape = RoundedCornerShape(8.dp),
+                            color = SurfaceElevated,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, CrunchyOrange)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = null,
+                                    tint = CrunchyOrange,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "DOWNLOAD BATCH",
+                                    color = CrunchyOrange,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(12.dp))
             }
         }
@@ -439,6 +477,104 @@ fun DetailScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+
+    if (showBatchDownloadSheet) {
+        val downloadDao = app.database.downloadDao()
+        val downloadStatuses = remember(episodeDownloads) {
+            episodeDownloads.associate { it.epId to it.status }
+        }
+        val unDownloadedEpisodes = remember(uiState.episodes, downloadStatuses) {
+            uiState.episodes.filter { ep ->
+                val status = downloadStatuses[ep.id]
+                status == null || status == com.shinsei.anime.data.local.DownloadEntity.STATUS_FAILED || status == com.shinsei.anime.data.local.DownloadEntity.STATUS_CANCELLED
+            }
+        }
+
+        ModalBottomSheet(
+            onDismissRequest = { showBatchDownloadSheet = false },
+            containerColor = SurfaceDark
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
+            ) {
+                Text(
+                    text = "Batch Download Episodes",
+                    color = TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Queue multiple episodes for offline playback",
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 2.dp, bottom = 16.dp)
+                )
+
+                val options = listOf(
+                    "Next 5 Episodes" to 5,
+                    "Next 10 Episodes" to 10,
+                    "All Remaining Episodes (${unDownloadedEpisodes.size})" to unDownloadedEpisodes.size
+                )
+
+                options.forEach { (label, count) ->
+                    val actualCount = minOf(count, unDownloadedEpisodes.size)
+                    val isEnabled = actualCount > 0
+                    Surface(
+                        onClick = {
+                            if (isEnabled) {
+                                showBatchDownloadSheet = false
+                                val toQueue = unDownloadedEpisodes.take(actualCount).map { Pair(it.id, it.num) }
+                                if (toQueue.isNotEmpty()) {
+                                    downloadManager.queueBatchDownloads(
+                                        animeId = detail.id,
+                                        animeTitle = detail.title,
+                                        animePoster = detail.poster,
+                                        episodes = toQueue,
+                                        isDub = isDubSelected
+                                    )
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Queued ${toQueue.size} episodes for download",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isEnabled) SurfaceElevated else SurfaceDark,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, SurfaceBorder),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = label,
+                                color = if (isEnabled) TextPrimary else TextMuted,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = null,
+                                tint = if (isEnabled) CrunchyOrange else TextMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
