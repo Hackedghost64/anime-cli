@@ -1,7 +1,7 @@
 # Design Specification: Shinsei Anime Native Android App & Dynamic Script Runner
 
 **Date:** 2026-09-25  
-**Version:** 1.0.0  
+**Version:** 1.1.0 (Hardened with Architect Audit Feedback)  
 **Target:** Android APK (API 26+ / Android 8.0 to Android 15+)  
 **Repository Location:** `/home/divyam/Downloads/projects/anime-cli/android`
 
@@ -14,8 +14,8 @@ Shinsei Anime is an autonomous, lightweight native Android media streaming appli
 ### Core Problems Solved:
 1. **Zero PC Bottleneck**: Eliminates the requirement to keep a PC running with a web browser or Cloudflare tunnel. Playback happens directly on the mobile device.
 2. **Zero Browser CORS Restrictions**: Mobile native media engines (ExoPlayer) do not enforce browser CORS policies, enabling direct playback of Kyoto and Anilab 1080p master HLS (`.m3u8`) streams without a local reverse proxy.
-3. **Hot-Reloadable Extraction ("Dumb Runner")**: Fragile scraping logic, endpoints, and headers live inside a modular `provider.bundle.js` evaluated by an embedded **QuickJS** runtime with a headless WebView fallback for Cloudflare Turnstile/Managed Challenges. Updates occur over the air or via QR scan without rebuilding the APK.
-4. **Instant P2P Sync (`anime-cli sync`)**: A 50ms local Wi-Fi handshake via an ephemeral QR code syncs watch history between the phone's Room database and the PC's SQLite database.
+3. **Hot-Reloadable Extraction ("Dumb Runner")**: Fragile scraping logic, endpoints, and headers live inside a modular `provider.bundle.js` evaluated by an embedded **QuickJS-KT** runtime with an invisible background WebView fallback for Cloudflare Turnstile/Managed Challenges. Updates occur over the air or via QR scan without rebuilding the APK.
+4. **Skew-Immune P2P Sync (`anime-cli sync`)**: A 50ms local Wi-Fi handshake via an ephemeral QR code syncs watch history between the phone's Room database and the PC's SQLite database, using relative elapsed age calculation to eliminate clock-skew conflicts.
 
 ---
 
@@ -101,14 +101,19 @@ Shinsei Anime is an autonomous, lightweight native Android media streaming appli
   * `[⚡ Skip Intro]` / `[⚡ Skip Outro]`: Orange pill floating directly above the right side of the scrubber when current time matches AniSkip intervals.
   * Autoplay Countdown Banner: Appears in the last 45 seconds of an episode with 10s countdown to next episode.
 
-#### Gestures:
-* **Double-Tap Left**: Seek $-10$s with curved animated ripple and cumulative badge.
-* **Double-Tap Right**: Seek $+10$s with curved animated ripple.
-* **Center Double-Tap**: Isolated; does not toggle fullscreen.
-* **Vertical Drag (Left 40%)**: Screen brightness adjust with HUD slider.
-* **Vertical Drag (Right 40%)**: Media volume adjust with HUD slider.
-* **Pinch-to-Zoom**: Two-finger pinch toggles between 16:9 Letterbox and 20:9 Fullscreen Fill.
-* **Picture-in-Picture (PiP)**: Automatic transition via Android `PictureInPictureParams` when user navigates home.
+#### Gestures & Media3 Controls Binding:
+* **Gesture Layer**: `PlayerView.useController = false` is explicitly set to ensure Jetpack Compose pointer listeners receive all raw touch events.
+* **Curved Double-Tap Seeking**: Custom `Canvas` quadratic bezier arc hugging left/right screen edges with a 650ms debounce window and cumulative count (`+10s`, `+20s`, `+30s`).
+* **Center Zone**: Strict deadzone for single-tap controls visibility toggle.
+* **Dual-Axis Swiping**:
+  * Left 40% vertical swipe: adjusts `activity.window.attributes.screenBrightness`.
+  * Right 40% vertical swipe: adjusts `AudioManager.STREAM_MUSIC` volume.
+  * Angle-threshold gating: only engages if vertical delta dominates horizontal swipe.
+* **Pinch-to-Zoom**: Two-finger pinch triggers `AspectRatioFrameLayout.RESIZE_MODE_FIT` (16:9) vs `RESIZE_MODE_ZOOM` (20:9 crop).
+* **Audio Focus**: Media3 configured with `C.AUDIO_CONTENT_TYPE_MOVIE`, `C.USAGE_MEDIA`, and `handleAudioFocus = true`.
+* **Picture-in-Picture (PiP)**:
+  * Android 12+ (API 31+): Uses `PictureInPictureParams.Builder.setAutoEnterEnabled(true)` for smooth auto-PiP.
+  * Lifecycle Guard: `if (!isInPictureInPictureMode) player.pause()` in `onPause()` to prevent freezing during PiP transitions.
 
 ---
 
@@ -135,30 +140,31 @@ val loadControl = DefaultLoadControl.Builder()
 
 ## 5. Dumb Runner Engine (`provider.bundle.js`)
 
-### 5.1 QuickJS Integration
-* Embeds `quickjs-android` via JNI.
+### 5.1 QuickJS-KT Integration
+* Uses `io.github.dokar3:quickjs-kt` with native coroutine and microtask execution.
+* The script bundle is wrapped in an IIFE registering to `globalThis.__provider = { ... }`.
 * Exposes safe native bridges:
   * `httpFetch(url, options): Promise<string>`
   * `log(level, msg)`
-* Evaluates cached `provider.bundle.js`.
 
 ### 5.2 Script Contract Interface
 ```javascript
-// provider.bundle.js specification
-module.exports = {
-  version: "1.0.0",
-  getHomeFeed: async () => { /* returns { spotlight: [...], rails: [...] } */ },
-  search: async (query, page) => { /* returns { results: [...], hasMore: boolean } */ },
-  getEpisodes: async (animeId) => { /* returns [{ id, num, title, thumb }] */ },
-  getServers: async (animeId, epId) => { /* returns [{ id, name, lang: 'sub'|'dub' }] */ },
-  resolveStream: async (animeId, serverId) => { /* returns { url: "https://...m3u8", headers: {} } */ },
-  getSkipTimes: async (title, epNum) => { /* returns { op: [start, end], ed: [start, end] } */ }
-};
+// provider.bundle.js specification (IIFE wrapper)
+(function(exports) {
+  exports.version = "1.1.0";
+  exports.getHomeFeed = async function() { /* returns { spotlight: [...], rails: [...] } */ };
+  exports.search = async function(query, page) { /* returns { results: [...], hasMore: boolean } */ };
+  exports.getEpisodes = async function(animeId) { /* returns [{ id, num, title, thumb }] */ };
+  exports.getServers = async function(animeId, epId) { /* returns [{ id, name, lang: 'sub'|'dub' }] */ };
+  exports.resolveStream = async function(animeId, serverId) { /* returns { url: "https://...m3u8", headers: {} } */ };
+  exports.getSkipTimes = async function(title, epNum) { /* returns { op: [start, end], ed: [start, end] } */ };
+})(globalThis.__provider = {});
 ```
 
 ### 5.3 Cloudflare Turnstile / Challenge Fallback
-* If `httpFetch` receives HTTP 403 / 503 with Cloudflare challenge markers, the native Android layer silently routes the request through a hidden background `WebView` to acquire challenge clearance cookies (`cf_clearance`).
-* Cookies are passed back to QuickJS for subsequent requests.
+* **User-Agent Parity**: OkHttp uses `WebSettings.getDefaultUserAgent(context)`.
+* **Cookie Harvesting**: If `httpFetch` receives HTTP 403/503 with Cloudflare challenge markers, an invisible 1dp WebView mounted in the Activity hierarchy loads the URL.
+* Once `onPageFinished` fires and `CookieManager` has `cf_clearance` and `__cf_bm`, cookies are synchronized into OkHttp's `CookieJar`, and the request retries seamlessly.
 
 ---
 
@@ -166,41 +172,31 @@ module.exports = {
 
 ### 6.1 Handshake Flow
 1. **PC**: User runs `anime-cli sync`.
-   - Starts local HTTP server on port `8088` (or random free port).
+   - Starts local HTTP server on port `8088`.
    - Generates ephemeral auth token: `token = secrets.token_urlsafe(16)`.
    - Displays ASCII QR code: `shinsei://sync?host=192.168.0.x&port=8088&token=XYZ`.
 2. **Mobile**: User taps "Sync with PC" in app.
+   - Verifies Wi-Fi connection (warns if on cellular data).
    - Camera scans QR code.
    - App performs `POST http://192.168.0.x:8088/api/sync` with header `X-Sync-Token: XYZ`.
-   - Payload:
-     ```json
-     {
-       "client_timestamp": 1727255000,
-       "progress_deltas": [
-         { "anime_id": "123", "ep_id": "456", "position": 842.5, "duration": 1420.0, "updated_at": 1727254900 }
-       ],
-       "script_version": "1.0.0"
-     }
-     ```
-3. **PC Response**:
-   - PC updates local `watch_progress` table using `MAX(updated_at)` conflict resolution.
-   - PC returns its progress deltas:
-     ```json
-     {
-       "ok": true,
-       "progress_deltas": [ ... ],
-       "latest_script": "<provider.bundle.js content if newer>"
-     }
-     ```
+   - Payload includes `client_timestamp = int(time.time())` and progress deltas.
+3. **PC Skew-Immune Conflict Resolution**:
+   - Calculates relative age: $age = client\_timestamp - updated\_at$.
+   - Compares with PC relative age: $pc\_age = pc\_time - pc\_updated\_at$.
+   - Record with smallest relative age (watched most recently) wins, completely immune to clock drift.
 4. **Mobile Complete**:
    - Mobile updates Room database.
    - If `latest_script` is returned, mobile updates `provider.bundle.js` in private storage.
-   - PC displays: `✓ Synced with Shinsei Mobile in 42ms`.
-   - PC server terminates automatically after 30 seconds or successful sync.
+   - Both devices finish in <50ms.
 
 ---
 
-## 7. Security & Privacy
-* **Zero Analytics / Telemetry**: No third-party tracking SDKs.
-* **Local Storage Only**: Watch history resides exclusively on device SQLite/Room databases.
-* **P2P Encryption & Tokenization**: Wi-Fi sync requires the physical QR token; unauthorized LAN devices cannot read watch history.
+## 7. Security & Android Manifest Specifications
+* **Network Security**: `res/xml/network_security_config.xml` permits cleartext traffic strictly to local subnets (`192.168.0.0/16`, `10.0.0.0/8`, `172.16.0.0/12`) for P2P sync.
+* **Manifest Permissions**:
+  * `android.permission.INTERNET`
+  * `android.permission.ACCESS_NETWORK_STATE`
+  * `android.permission.CAMERA`
+* **Activity Config**:
+  * `android:supportsPictureInPicture="true"`
+  * `android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"` on `PlayerActivity`.
