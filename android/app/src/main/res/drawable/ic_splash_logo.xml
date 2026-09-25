@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
+
+    <!-- Outer Ambient Glow Halo -->
+    <path
+        android:fillColor="#22F47521"
+        android:pathData="M144,144m-90,0a90,90 0 1,1 180,0a90,90 0 1,1 -180,0" />
+
+    <path
+        android:fillColor="#44F47521"
+        android:pathData="M144,144m-70,0a70,70 0 1,1 140,0a70,70 0 1,1 -140,0" />
+
+    <!-- Crunchyroll Orange Outer Crescent Crest -->
+    <path
+        android:fillColor="#F47521"
+        android:pathData="M112,85 C134,70 178,75 198,100 C214,120 214,155 198,175 C178,200 134,205 112,190 C96,180 90,165 90,144 C90,116 98,96 112,85 Z M124,106 C118,116 115,129 115,144 C115,157 118,168 124,178 C140,190 168,185 182,168 C194,154 194,129 182,116 C170,100 140,97 124,106 Z" />
+
+    <!-- Sharp Play Core (Amber Glow) -->
+    <path
+        android:fillColor="#FFB800"
+        android:pathData="M130,112 L178,144 L130,176 Z" />
+
+    <!-- Katana Core Flare (White) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M140,116 L170,136 L150,142 Z" />
+
+    <!-- Sparkle Accent Star -->
+    <path
+        android:fillColor="#FFB800"
+        android:pathData="M192,90 L196,80 L200,90 L210,94 L200,98 L196,108 L192,98 L182,94 Z" />
+</vector>

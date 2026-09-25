@@ -5,4 +5,10 @@
         <item name="android:navigationBarColor">#00000000</item>
         <item name="android:windowBackground">#0B0C0E</item>
     </style>
+
+    <style name="Theme.ShinseiAnime.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#0B0C0E</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.ShinseiAnime</item>
+    </style>
 </resources>
