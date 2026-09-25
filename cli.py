@@ -26,6 +26,7 @@ from anilab.client import AnilabClient
 from anilab.kyoto import KyotoResolver
 import aniskip
 import db
+from fastapi import FastAPI, Header, HTTPException, Request
 
 # Terminal Colors
 C_RESET = "\033[0m"
@@ -379,6 +380,95 @@ def cmd_browser(port: int = 8000, share: bool = False, open_browser: bool = True
                 pass
         if inhibitor:
             inhibitor.stop()
+
+def create_sync_app(token: str, sync_done_event: Optional[threading.Event] = None, sync_stats: Optional[dict] = None) -> FastAPI:
+    sync_app = FastAPI()
+    if sync_stats is None:
+        sync_stats = {"received": 0, "sent": 0}
+
+    @sync_app.post("/api/sync")
+    async def handle_p2p_sync(request: Request, x_sync_token: Optional[str] = Header(None)):
+        if x_sync_token != token:
+            raise HTTPException(status_code=401, detail="Invalid sync token")
+
+        data = await request.json()
+        client_ts = int(data.get("client_timestamp") or time.time())
+        phone_deltas = data.get("progress_deltas") or []
+
+        # Merge phone deltas into PC SQLite using relative age conflict resolution
+        merged_count = await db.merge_progress_deltas(phone_deltas, client_timestamp=client_ts)
+        sync_stats["received"] = len(phone_deltas)
+
+        # Get PC progress records
+        pc_progress = await db.get_all_progress()
+        sync_stats["sent"] = len(pc_progress)
+
+        # Check for provider bundle script update
+        latest_script = None
+        script_path = os.path.join(os.path.dirname(__file__), "android/app/src/main/assets/provider.bundle.js")
+        if os.path.exists(script_path):
+            try:
+                with open(script_path, "r", encoding="utf-8") as f:
+                    latest_script = f.read()
+            except Exception:
+                pass
+
+        # Trigger clean server exit in 600ms if event provided
+        if sync_done_event:
+            threading.Timer(0.6, sync_done_event.set).start()
+
+        return {
+            "ok": True,
+            "merged": merged_count,
+            "progress_deltas": pc_progress,
+            "latest_script": latest_script
+        }
+
+    return sync_app
+
+# -----------------------------------------------------------------------------
+# COMMAND: sync (P2P Watch History Sync with Shinsei Mobile App)
+# -----------------------------------------------------------------------------
+def cmd_sync(port: int = 8088):
+    import secrets
+    import uvicorn
+
+    banner()
+    local_ip = get_local_ip()
+    token = secrets.token_urlsafe(16)
+    qr_payload = f"shinsei://sync?host={local_ip}&port={port}&token={token}"
+
+    print(f"{C_BOLD}⚡ P2P MOBILE SYNC (Shinsei Android App){C_RESET}")
+    print(f"  • {C_BOLD}Local Address:{C_RESET} http://{local_ip}:{port}")
+    print(f"  • {C_BOLD}Auth Token:{C_RESET}    {token}")
+    print(f"  • {C_DIM}Connect your phone to the same Wi-Fi network as this PC.{C_RESET}")
+    print(f"  • {C_DIM}Firewall tip: If connection fails, allow port {port}: sudo ufw allow {port}/tcp{C_RESET}\n")
+
+    print(f"{C_ORANGE}Scan this QR code with the Shinsei Android app camera:{C_RESET}")
+    print_qr_code(qr_payload)
+
+    sync_done_event = threading.Event()
+    sync_stats = {"received": 0, "sent": 0}
+    sync_app = create_sync_app(token, sync_done_event, sync_stats)
+
+    config = uvicorn.Config(sync_app, host="0.0.0.0", port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    server_thread = threading.Thread(target=server.run, daemon=True)
+    server_thread.start()
+
+    print(f"{C_CYAN}Waiting for Shinsei Android App to scan QR code (Press Ctrl+C to cancel)...{C_RESET}")
+    try:
+        while not sync_done_event.is_set():
+            time.sleep(0.2)
+        print(f"\n{C_GREEN}{C_BOLD}✓ P2P Synchronization successful!{C_RESET}")
+        print(f"  • Received from phone: {sync_stats['received']} records")
+        print(f"  • Sent to phone:       {sync_stats['sent']} records")
+        print(f"  • Watch history is now 100% synchronized.\n")
+    except KeyboardInterrupt:
+        print("\nSync cancelled.")
+    finally:
+        server.should_exit = True
+        time.sleep(0.3)
 
 # -----------------------------------------------------------------------------
 # COMMAND: terminal player (The 10x better ani-cli)
@@ -911,6 +1001,7 @@ async def interactive_menu():
             "📅 Today's Airing Radar (Live Release Schedule)",
             "▶ Continue Watching (Resume last episode)",
             "📥 Download Episode (1080p MP4 via FFmpeg)",
+            "⚡ P2P Mobile Sync (QR code for Shinsei Android app)",
             "🌐 Launch Web Browser",
             "🔗 Share Public Tunnel (QR Code for phone)",
             "❓ Help & Shortcuts Guide",
@@ -940,12 +1031,15 @@ async def interactive_menu():
             await cmd_terminal(download=True)
             break
         elif sel == 5:
-            cmd_browser()
+            cmd_sync()
             break
         elif sel == 6:
-            cmd_browser(share=True)
+            cmd_browser()
             break
         elif sel == 7:
+            cmd_browser(share=True)
+            break
+        elif sel == 8:
             show_help()
             try:
                 input(f"\n{C_ORANGE}Press Enter to return to menu...{C_RESET}")
@@ -983,6 +1077,7 @@ def main():
     parser.add_argument("-d", "--dub", action="store_true", help="Prefer English Dub audio")
     parser.add_argument("--sub", action="store_true", help="Prefer Japanese Sub audio")
     parser.add_argument("-o", "--download", action="store_true", help="Download episode in 1080p MP4 via FFmpeg")
+    parser.add_argument("--sync", action="store_true", help="Start P2P sync server & QR code for Shinsei Mobile App")
     parser.add_argument("-p", "--port", type=int, default=8000, help="Server port (default: 8000)")
     parser.add_argument("--server", action="store_true", help="Run headless background streaming server")
     parser.add_argument("--no-sleep", "--keep-awake", dest="keep_awake", action="store_true", default=True, help="Prevent PC from sleeping or suspending while server is running (default: enabled)")
@@ -1007,7 +1102,9 @@ def main():
         args.query = parts[1] if len(parts) > 1 else None
 
     # Dispatch based on simple flags
-    if args.server or args.query in ("server", "serve", "stream"):
+    if args.sync or (args.query == "sync"):
+        cmd_sync(port=8088 if args.port == 8000 else args.port)
+    elif args.server or args.query in ("server", "serve", "stream"):
         cmd_stream(port=args.port, keep_awake=args.keep_awake)
     elif args.share or (args.query == "share"):
         cmd_browser(port=args.port, share=True, keep_awake=args.keep_awake)

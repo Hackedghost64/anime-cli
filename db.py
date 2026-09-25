@@ -151,3 +151,75 @@ async def is_in_watchlist(anime_id: str) -> bool:
     async with get_db() as db:
         async with db.execute("SELECT 1 FROM watchlist WHERE anime_id=?", (str(anime_id),)) as cursor:
             return (await cursor.fetchone()) is not None
+
+async def get_all_progress() -> List[Dict[str, Any]]:
+    """Return all watch progress records for P2P synchronization."""
+    async with get_db() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM watch_progress ORDER BY updated_at DESC") as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+async def merge_progress_deltas(deltas: List[Dict[str, Any]], client_timestamp: int) -> int:
+    """Merge incoming deltas using relative-age conflict resolution.
+    
+    age = client_timestamp - delta['updated_at']
+    pc_age = now - existing['updated_at']
+    If incoming record is newer (smaller relative age), update.
+    """
+    now = int(time.time())
+    updated_count = 0
+    async with get_db() as db:
+        db.row_factory = aiosqlite.Row
+        for d in deltas:
+            anime_id = str(d.get("anime_id", ""))
+            ep_id = str(d.get("ep_id", ""))
+            if not anime_id or not ep_id:
+                continue
+
+            client_updated_at = int(d.get("updated_at") or 0)
+            incoming_age = max(0, client_timestamp - client_updated_at)
+            normalized_updated_at = max(0, now - incoming_age)
+
+            async with db.execute(
+                "SELECT position, duration, updated_at FROM watch_progress WHERE anime_id=? AND ep_id=?",
+                (anime_id, ep_id)
+            ) as cursor:
+                existing = await cursor.fetchone()
+
+            should_update = False
+            if not existing:
+                should_update = True
+            else:
+                existing_age = max(0, now - int(existing["updated_at"]))
+                if incoming_age < existing_age:
+                    should_update = True
+
+            if should_update:
+                await db.execute("""
+                    INSERT INTO watch_progress
+                    (anime_id, ep_id, anime_title, anime_poster, ep_num, ep_name, position, duration, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(anime_id, ep_id) DO UPDATE SET
+                        position=excluded.position,
+                        duration=excluded.duration,
+                        updated_at=excluded.updated_at,
+                        anime_title=CASE WHEN excluded.anime_title != '' THEN excluded.anime_title ELSE watch_progress.anime_title END,
+                        anime_poster=CASE WHEN excluded.anime_poster != '' THEN excluded.anime_poster ELSE watch_progress.anime_poster END,
+                        ep_num=CASE WHEN excluded.ep_num != '' THEN excluded.ep_num ELSE watch_progress.ep_num END,
+                        ep_name=CASE WHEN excluded.ep_name != '' THEN excluded.ep_name ELSE watch_progress.ep_name END
+                """, (
+                    anime_id,
+                    ep_id,
+                    d.get("anime_title") or "",
+                    d.get("anime_poster") or "",
+                    str(d.get("ep_num")) if d.get("ep_num") is not None else "",
+                    d.get("ep_name") or "",
+                    float(d.get("position") or 0.0),
+                    float(d.get("duration") or 0.0),
+                    normalized_updated_at
+                ))
+                updated_count += 1
+        await db.commit()
+    return updated_count
+
