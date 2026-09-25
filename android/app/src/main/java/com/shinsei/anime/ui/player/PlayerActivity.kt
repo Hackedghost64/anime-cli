@@ -243,6 +243,15 @@ class PlayerActivity : ComponentActivity() {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
     }
 
+    // "View All Episodes" — opens DetailScreen for this anime in MainActivity
+    private fun openDetailScreen() {
+        val intent = android.content.Intent(this, com.shinsei.anime.ui.MainActivity::class.java).apply {
+            putExtra("open_detail_anime_id", animeId)
+            flags = android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        startActivity(intent)
+    }
+
     @OptIn(UnstableApi::class)
     @Composable
     private fun PlayerScreenContent() {
@@ -464,7 +473,7 @@ class PlayerActivity : ComponentActivity() {
 
                     // View All Episodes button
                     Surface(
-                        onClick = { finish() }, // Back to DetailScreen which has full episode list
+                        onClick = { openDetailScreen() },
                         shape = RoundedCornerShape(8.dp),
                         color = SurfaceDark,
                         border = androidx.compose.foundation.BorderStroke(1.dp, SurfaceBorder),

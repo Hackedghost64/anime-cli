@@ -69,9 +69,12 @@ class MainActivity : ComponentActivity() {
     private val homeViewModel: HomeViewModel by viewModels()
     private val detailViewModel: DetailViewModel by viewModels()
 
+    private var pendingDetailAnimeId: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        pendingDetailAnimeId = intent.getStringExtra("open_detail_anime_id")
 
         setContent {
             ShinseiAnimeTheme {
@@ -85,10 +88,28 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val animeId = intent.getStringExtra("open_detail_anime_id")
+        if (!animeId.isNullOrEmpty()) {
+            pendingDetailAnimeId = animeId
+        }
+    }
+
     @Composable
     private fun AppNavigation() {
         val navController = rememberNavController()
         var showSyncSheet by remember { mutableStateOf(false) }
+
+        // Handle "View All Episodes" navigation from PlayerActivity
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            val id = pendingDetailAnimeId
+            if (!id.isNullOrEmpty()) {
+                pendingDetailAnimeId = null
+                navController.navigate("detail/$id")
+            }
+        }
 
         NavHost(navController = navController, startDestination = "main") {
             composable("main") {

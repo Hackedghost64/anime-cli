@@ -12,6 +12,8 @@ import android.webkit.WebViewClient
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -61,7 +63,6 @@ class ScriptRunner(private val context: Context) {
             if (!initDeferred.isCompleted) {
                 initDeferred.complete(true)
             }
-            checkForRemoteUpdate()
         }
 
         @JavascriptInterface
@@ -107,9 +108,21 @@ class ScriptRunner(private val context: Context) {
         }
     }
 
+    private val appScope = CoroutineScope(Dispatchers.IO)
+
     init {
+        // Start WebView on main thread
         Handler(Looper.getMainLooper()).post {
             initWebView()
+        }
+        // Check for bundle updates in parallel — does NOT block WebView init
+        appScope.launch {
+            checkForRemoteUpdate()
+            // Re-check every 30 minutes while app is alive
+            while (true) {
+                kotlinx.coroutines.delay(30 * 60 * 1000L)
+                checkForRemoteUpdate()
+            }
         }
     }
 
@@ -239,28 +252,31 @@ class ScriptRunner(private val context: Context) {
         return false
     }
 
-    private fun checkForRemoteUpdate() {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val req = Request.Builder().url(GITHUB_SCRIPT_URL).build()
-                val resp = okHttpClient.newCall(req).execute()
-                resp.use { response ->
-                    if (response.isSuccessful) {
-                        val remoteCode = response.body?.string() ?: return@use
-                        if (remoteCode.contains("ShinseiProvider") && remoteCode.length > 2000) {
-                            val bundled = context.assets.open("provider.bundle.js").use { InputStreamReader(it).readText() }
-                            val bundledVer = extractVersion(bundled)
-                            val remoteVer = extractVersion(remoteCode)
-                            if (isNewerVersion(remoteVer, bundledVer)) {
-                                Log.i(tag, "Found newer OTA script v$remoteVer on GitHub (bundled: v$bundledVer). Updating...")
-                                updateScript(remoteCode)
-                            }
+    private suspend fun checkForRemoteUpdate() {
+        try {
+            val req = Request.Builder().url(GITHUB_SCRIPT_URL).build()
+            val resp = okHttpClient.newCall(req).execute()
+            resp.use { response ->
+                if (response.isSuccessful) {
+                    val remoteCode = response.body?.string() ?: return
+                    if (remoteCode.contains("ShinseiProvider") && remoteCode.length > 2000) {
+                        val bundled = context.assets.open("provider.bundle.js").use { InputStreamReader(it).readText() }
+                        val currentCode = File(context.filesDir, "provider.bundle.js").let {
+                            if (it.exists() && it.length() > 0) it.readText() else bundled
+                        }
+                        val currentVer = extractVersion(currentCode)
+                        val remoteVer = extractVersion(remoteCode)
+                        if (isNewerVersion(remoteVer, currentVer)) {
+                            Log.i(tag, "OTA: newer bundle v$remoteVer found (current: v$currentVer). Caching...")
+                            updateScript(remoteCode)
+                        } else {
+                            Log.d(tag, "OTA: bundle up to date (v$currentVer)")
                         }
                     }
                 }
-            } catch (e: Exception) {
-                Log.d(tag, "GitHub OTA script check skipped: ${e.message}")
             }
+        } catch (e: Exception) {
+            Log.d(tag, "OTA bundle check skipped: ${e.message}")
         }
     }
 
@@ -356,6 +372,7 @@ class ScriptRunner(private val context: Context) {
         callJsMethod("getSkipTimes", listOf(target, epNum))
 
     fun destroy() {
+        appScope.cancel()
         Handler(Looper.getMainLooper()).post {
             webView?.destroy()
             webView = null
