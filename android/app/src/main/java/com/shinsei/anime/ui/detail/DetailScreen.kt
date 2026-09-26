@@ -35,7 +35,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -109,6 +113,19 @@ fun DetailScreen(
     }
 
     val detail = uiState.detail ?: return
+
+    val totalEps = uiState.episodes.size
+    val chunkSize = 100
+    val chunkCount = if (totalEps > chunkSize) ((totalEps + chunkSize - 1) / chunkSize) else 1
+    var selectedChunkIndex by remember(totalEps) { mutableStateOf(0) }
+
+    val displayedEpisodes = if (chunkCount > 1) {
+        val start = selectedChunkIndex * chunkSize
+        val end = minOf(start + chunkSize, totalEps)
+        uiState.episodes.subList(start, end)
+    } else {
+        uiState.episodes
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -324,24 +341,62 @@ fun DetailScreen(
                             border = androidx.compose.foundation.BorderStroke(1.dp, CrunchyOrange)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Download,
                                     contentDescription = null,
                                     tint = CrunchyOrange,
-                                    modifier = Modifier.size(13.dp)
+                                    modifier = Modifier.size(14.dp)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "DOWNLOAD BATCH",
+                                    text = "DOWNLOAD ALL",
                                     color = CrunchyOrange,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     letterSpacing = 0.5.sp
                                 )
                             }
+                        }
+                    }
+                }
+
+                // Grouped range tabs for series with large episode counts (e.g., 1-100, 101-200, 201-300...)
+                if (chunkCount > 1) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    ScrollableTabRow(
+                        selectedTabIndex = selectedChunkIndex,
+                        containerColor = BackgroundBlack,
+                        contentColor = CrunchyOrange,
+                        edgePadding = 0.dp,
+                        indicator = { tabPositions ->
+                            if (selectedChunkIndex < tabPositions.size) {
+                                TabRowDefaults.SecondaryIndicator(
+                                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedChunkIndex]),
+                                    color = CrunchyOrange
+                                )
+                            }
+                        },
+                        divider = {}
+                    ) {
+                        for (i in 0 until chunkCount) {
+                            val rangeStart = (i * chunkSize) + 1
+                            val rangeEnd = minOf((i + 1) * chunkSize, totalEps)
+                            val isSelected = selectedChunkIndex == i
+                            Tab(
+                                selected = isSelected,
+                                onClick = { selectedChunkIndex = i },
+                                text = {
+                                    Text(
+                                        text = "$rangeStart–$rangeEnd",
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = 13.sp,
+                                        color = if (isSelected) CrunchyOrange else TextSecondary
+                                    )
+                                }
+                            )
                         }
                     }
                 }
@@ -349,8 +404,8 @@ fun DetailScreen(
             }
         }
 
-        // Episode List Items
-        items(uiState.episodes, key = { it.id }) { ep ->
+        // Episode List Items (scoped to selected chunk or full list)
+        items(displayedEpisodes, key = { it.id }) { ep ->
             val progress = uiState.progressMap[ep.id]
             val isWatched = progress != null && progress.duration > 0 &&
                     (progress.position / progress.duration) >= 0.88
@@ -502,21 +557,21 @@ fun DetailScreen(
                     .padding(horizontal = 24.dp, vertical = 16.dp)
             ) {
                 Text(
-                    text = "Batch Download Episodes",
+                    text = "Download All / Bulk Queue",
                     color = TextPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Queue multiple episodes for offline playback",
+                    text = "Queue episodes for offline playback",
                     color = TextSecondary,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 2.dp, bottom = 16.dp)
                 )
 
                 val options = listOf(
-                    "Next 5 Episodes" to 5,
                     "Next 10 Episodes" to 10,
+                    "Next 12 Episodes" to 12,
                     "All Remaining Episodes (${unDownloadedEpisodes.size})" to unDownloadedEpisodes.size
                 )
 

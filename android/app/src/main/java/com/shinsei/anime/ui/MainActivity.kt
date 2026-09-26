@@ -78,6 +78,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         intent.getStringExtra("open_detail_anime_id")?.let {
             pendingDetailAnimeId.value = it
+            intent.removeExtra("open_detail_anime_id")
         }
 
         setContent {
@@ -97,6 +98,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         intent.getStringExtra("open_detail_anime_id")?.let {
             pendingDetailAnimeId.value = it
+            intent.removeExtra("open_detail_anime_id")
         }
     }
 

@@ -86,18 +86,27 @@ fun DownloadsScreen(
     val downloads by downloadDao.observeAllDownloads().collectAsState(initial = emptyList())
     val activeDownload by downloadManager.currentDownload.collectAsState()
 
-    val completedDownloads = downloads.filter { it.status == DownloadEntity.STATUS_COMPLETED }
+    // Show series card as soon as any episode is queued, downloading, or completed
+    val relevantDownloads = downloads.filter {
+        it.status == DownloadEntity.STATUS_COMPLETED ||
+        it.status == DownloadEntity.STATUS_DOWNLOADING ||
+        it.status == DownloadEntity.STATUS_QUEUED
+    }
+    val completedDownloads = relevantDownloads.filter { it.status == DownloadEntity.STATUS_COMPLETED }
     val totalSizeMb = completedDownloads.sumOf { it.fileSize } / (1024 * 1024)
 
     var viewingSeriesId by remember { mutableStateOf<String?>(null) }
 
-    val groupedSeries = remember(completedDownloads) {
-        completedDownloads.groupBy { it.animeId }.map { (animeId, eps) ->
+    val groupedSeries = remember(relevantDownloads) {
+        relevantDownloads.groupBy { it.animeId }.map { (animeId, eps) ->
             SeriesDownloadGroup(
                 animeId = animeId,
                 animeTitle = eps.firstOrNull()?.animeTitle ?: "Anime",
                 animePoster = eps.firstOrNull()?.animePoster ?: "",
-                episodes = eps.sortedBy { it.epNum.toIntOrNull() ?: 0 },
+                episodes = eps.sortedWith(compareBy { ep ->
+                    // Sort numerically by episode number
+                    ep.epNum.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
+                }),
                 totalSizeBytes = eps.sumOf { it.fileSize }
             )
         }
@@ -280,7 +289,7 @@ fun DownloadsScreen(
         }
 
         // Empty state vs Series List vs Episodes List
-        if (completedDownloads.isEmpty() && activeDownload == null) {
+        if (relevantDownloads.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -515,13 +524,40 @@ private fun DownloadedEpisodeCard(
                     )
                 }
                 Spacer(modifier = Modifier.height(2.dp))
-                val sizeMb = item.fileSize / (1024 * 1024)
-                Text(
-                    text = "${sizeMb} MB • Ready Offline",
-                    color = CrunchyOrange,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                when (item.status) {
+                    DownloadEntity.STATUS_COMPLETED -> {
+                        val sizeMb = item.fileSize / (1024 * 1024)
+                        Text(
+                            text = "${sizeMb} MB • Ready Offline",
+                            color = CrunchyOrange,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    DownloadEntity.STATUS_DOWNLOADING -> {
+                        Text(
+                            text = "Downloading (${item.progress}%)",
+                            color = CrunchyOrange,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    DownloadEntity.STATUS_QUEUED -> {
+                        Text(
+                            text = "Queued for download",
+                            color = TextMuted,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    else -> {
+                        Text(
+                            text = item.status,
+                            color = TextMuted,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
             }
 
             // Delete action
