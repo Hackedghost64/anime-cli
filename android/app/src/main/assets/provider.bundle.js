@@ -6,7 +6,7 @@
 (function(exports) {
   'use strict';
 
-  exports.version = "1.3.0";
+  exports.version = "1.4.0";
 
   const ANILAB_BASE = "https://anilab2.amdapi.click/api";
   const KYOTO_BASE = "https://app.kyotoplayer.com/api/v4";
@@ -364,40 +364,60 @@
   };
 
   /**
-   * 7. AniSkip Integration (Supports numeric malId or title string)
+   * 7. AniSkip Integration (Supports numeric malId or title string with AniList & MAL ID fallback)
    */
   exports.getSkipTimes = async function(titleOrMalId, epNum) {
     if (!titleOrMalId) return { op: null, ed: null };
     try {
       const epInt = isNaN(parseInt(epNum, 10)) ? 1 : parseInt(epNum, 10);
-      let targetId = null;
+      const idsToCheck = [];
 
       if (typeof titleOrMalId === 'number' || /^\d+$/.test(String(titleOrMalId).trim())) {
-        targetId = parseInt(titleOrMalId, 10);
+        idsToCheck.push(parseInt(titleOrMalId, 10));
       } else {
-        const alRes = await requestJson(`https://graphql.anilist.co`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Accept": "application/json" },
-          body: JSON.stringify({
-            query: `query ($q: String) { Media (search: $q, type: ANIME) { id } }`,
-            variables: { q: String(titleOrMalId) }
-          })
-        });
-        targetId = alRes?.data?.Media?.id;
+        const cleanTitle = String(titleOrMalId)
+          .replace(/\s*\(?(TV|Dub|Sub|Season\s*\d+|Part\s*\d+|Cour\s*\d+)\)?/gi, '')
+          .trim();
+        const searchTitles = [cleanTitle, String(titleOrMalId).trim()].filter((v, i, a) => v && a.indexOf(v) === i);
+
+        for (const q of searchTitles) {
+          try {
+            const alRes = await requestJson(`https://graphql.anilist.co`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Accept": "application/json" },
+              body: JSON.stringify({
+                query: `query ($q: String) { Media (search: $q, type: ANIME) { id idMal } }`,
+                variables: { q }
+              })
+            });
+            const m = alRes?.data?.Media;
+            if (m?.id && !idsToCheck.includes(m.id)) idsToCheck.push(m.id);
+            if (m?.idMal && !idsToCheck.includes(m.idMal)) idsToCheck.push(m.idMal);
+            if (idsToCheck.length > 0) break;
+          } catch {}
+        }
       }
-      if (!targetId || targetId <= 0) return { op: null, ed: null };
 
-      const skipUrl = `${ANISKIP_BASE}/skip-times/${targetId}/${epInt}?types[]=op&types[]=ed&episodeLength=1440`;
-      const skipData = await requestJson(skipUrl);
-      if (!skipData.found || !Array.isArray(skipData.results)) return { op: null, ed: null };
+      if (idsToCheck.length === 0) return { op: null, ed: null };
 
-      const op = skipData.results.find(r => r.type === 'op');
-      const ed = skipData.results.find(r => r.type === 'ed');
+      for (const targetId of idsToCheck) {
+        try {
+          const skipUrl = `${ANISKIP_BASE}/skip-times/${targetId}/${epInt}?types[]=op&types[]=ed&episodeLength=1440`;
+          const skipData = await requestJson(skipUrl);
+          if (skipData && skipData.found && Array.isArray(skipData.results) && skipData.results.length > 0) {
+            const op = skipData.results.find(r => r.type === 'op');
+            const ed = skipData.results.find(r => r.type === 'ed');
+            if (op || ed) {
+              return {
+                op: op ? [op.interval.startTime, op.interval.endTime] : null,
+                ed: ed ? [ed.interval.startTime, ed.interval.endTime] : null
+              };
+            }
+          }
+        } catch {}
+      }
 
-      return {
-        op: op ? [op.interval.startTime, op.interval.endTime] : null,
-        ed: ed ? [ed.interval.startTime, ed.interval.endTime] : null
-      };
+      return { op: null, ed: null };
     } catch (err) {
       return { op: null, ed: null };
     }

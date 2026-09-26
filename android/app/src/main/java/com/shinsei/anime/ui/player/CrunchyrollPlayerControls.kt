@@ -6,6 +6,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -78,6 +80,7 @@ fun CrunchyrollPlayerControls(
     activeDoubleTap: DoubleTapRipple?,
     skipIntroRange: Pair<Long, Long>?,
     skipOutroRange: Pair<Long, Long>?,
+    isResolvingStream: Boolean = false,
     onToggleControls: () -> Unit,
     onBack: () -> Unit,
     onPlayPause: () -> Unit,
@@ -119,18 +122,23 @@ fun CrunchyrollPlayerControls(
             }
         }
 
-        // Floating "Skip Intro" / "Skip Outro" button
-        if (showSkipIntro || showSkipOutro) {
+        // Floating "Skip Intro" / "Skip Outro" button with Crunchyroll fade & slide animation
+        AnimatedVisibility(
+            visible = showSkipIntro || showSkipOutro,
+            enter = fadeIn(tween(400)) + slideInHorizontally(tween(400)) { it / 2 },
+            exit = fadeOut(tween(300)) + slideOutHorizontally(tween(300)) { it / 2 },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = if (controlsVisible) 84.dp else 24.dp, end = 24.dp)
+        ) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = if (controlsVisible) 84.dp else 24.dp, end = 24.dp),
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.BottomEnd
             ) {
                 Surface(
                     onClick = { if (showSkipIntro) onSkipIntro() else onSkipOutro() },
                     shape = RoundedCornerShape(20.dp),
-                    color = Color.Black.copy(alpha = 0.85f),
+                    color = Color.Black.copy(alpha = 0.88f),
                     border = androidx.compose.foundation.BorderStroke(1.dp, CrunchyOrange),
                     shadowElevation = 8.dp
                 ) {
@@ -288,7 +296,25 @@ fun CrunchyrollPlayerControls(
                         )
                     }
 
-                    if (playerState.isBuffering) {
+                    if (isResolvingStream) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = CrunchyOrange,
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(54.dp)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "Fetching stream...",
+                                color = TextPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    } else if (playerState.isBuffering) {
                         CircularProgressIndicator(
                             color = CrunchyOrange,
                             strokeWidth = 3.dp,

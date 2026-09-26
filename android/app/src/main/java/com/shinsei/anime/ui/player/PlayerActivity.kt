@@ -100,6 +100,7 @@ class PlayerActivity : ComponentActivity() {
     private var currentEpIndex by androidx.compose.runtime.mutableIntStateOf(0)
 
     private var isPipMode = false
+    private var isResolvingStream by androidx.compose.runtime.mutableStateOf(true)
     private var autoSaveJob: Job? = null
 
     @OptIn(UnstableApi::class)
@@ -179,6 +180,7 @@ class PlayerActivity : ComponentActivity() {
 
     private fun loadStreamAndPlay() {
         lifecycleScope.launch {
+            isResolvingStream = true
             try {
                 val app = ShinseiApp.instance
                 val existing = app.database.watchProgressDao().getProgress(animeId, epId)
@@ -189,6 +191,7 @@ class PlayerActivity : ComponentActivity() {
                     downloaded.status == com.shinsei.anime.data.local.DownloadEntity.STATUS_COMPLETED &&
                     java.io.File(downloaded.localPath).exists()
                 ) {
+                    isResolvingStream = false
                     media3Manager.prepareMedia(url = downloaded.localPath, initialPositionMs = initialPosMs)
                     return@launch
                 }
@@ -211,12 +214,14 @@ class PlayerActivity : ComponentActivity() {
                 }
 
                 if (streamUrl.isNotEmpty()) {
+                    isResolvingStream = false
                     media3Manager.prepareMedia(
                         url = streamUrl,
                         headers = headersMap,
                         initialPositionMs = initialPosMs
                     )
                 } else {
+                    isResolvingStream = false
                     android.widget.Toast.makeText(
                         this@PlayerActivity,
                         "Stream unavailable for episode $epNum",
@@ -224,6 +229,7 @@ class PlayerActivity : ComponentActivity() {
                     ).show()
                 }
             } catch (e: Exception) {
+                isResolvingStream = false
                 android.util.Log.e("PlayerActivity", "Playback resolution error", e)
                 android.widget.Toast.makeText(
                     this@PlayerActivity,
@@ -388,6 +394,7 @@ class PlayerActivity : ComponentActivity() {
                         activeDoubleTap = activeDoubleTap,
                         skipIntroRange = skipIntroRange,
                         skipOutroRange = skipOutroRange,
+                        isResolvingStream = isResolvingStream,
                         onToggleControls = { controlsVisible = !controlsVisible },
                         onBack = { finish() },
                         onPlayPause = { media3Manager.togglePlayPause() },
@@ -450,6 +457,7 @@ class PlayerActivity : ComponentActivity() {
                             activeDoubleTap = activeDoubleTap,
                             skipIntroRange = skipIntroRange,
                             skipOutroRange = skipOutroRange,
+                            isResolvingStream = isResolvingStream,
                             onToggleControls = { controlsVisible = !controlsVisible },
                             onBack = { finish() },
                             onPlayPause = { media3Manager.togglePlayPause() },
