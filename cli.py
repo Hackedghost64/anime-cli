@@ -496,6 +496,87 @@ def cmd_init(port: int = 8088):
     cmd_sync(port=port)
 
 # -----------------------------------------------------------------------------
+# COMMAND: build-apk (Build Shinsei Android APK with Gradle & Optional ADB Install)
+# -----------------------------------------------------------------------------
+def cmd_build_apk(release: bool = False, install: bool = False):
+    banner()
+    android_dir = os.path.join(BASE_DIR, "android")
+    gradlew_path = os.path.join(android_dir, "gradlew")
+
+    if not os.path.isdir(android_dir) or not os.path.exists(gradlew_path):
+        print(f"{C_RED}Error: Android project directory not found at {android_dir}{C_RESET}")
+        return
+
+    # Check Java
+    if not shutil.which("java"):
+        print(f"{C_RED}Error: Java (JDK 17+) is required to compile the Android app.{C_RESET}")
+        print(f"Install JDK with: {C_BOLD}sudo apt install -y openjdk-17-jdk{C_RESET}")
+        return
+
+    os.chmod(gradlew_path, 0o755)
+
+    build_type = "Release" if release else "Debug"
+    gradle_task = "assembleRelease" if release else "assembleDebug"
+    out_apk_rel = (
+        "app/build/outputs/apk/release/app-release.apk"
+        if release
+        else "app/build/outputs/apk/debug/app-debug.apk"
+    )
+    out_apk_path = os.path.join(android_dir, out_apk_rel)
+
+    print(f"{C_BOLD}🚀 Compiling Shinsei Anime Android App ({build_type})...{C_RESET}")
+    print(f"  • {C_BOLD}Gradle Task:{C_RESET} {C_CYAN}./gradlew {gradle_task}{C_RESET}")
+    print(f"  • {C_BOLD}Directory:{C_RESET}   {android_dir}\n")
+
+    cmd = ["./gradlew", gradle_task]
+    try:
+        ret = subprocess.run(cmd, cwd=android_dir)
+        if ret.returncode != 0:
+            print(f"\n{C_RED}{C_BOLD}✗ Build failed with exit code {ret.returncode}{C_RESET}")
+            return
+    except Exception as e:
+        print(f"\n{C_RED}{C_BOLD}✗ Build execution error: {e}{C_RESET}")
+        return
+
+    if os.path.exists(out_apk_path):
+        size_mb = os.path.getsize(out_apk_path) / (1024 * 1024)
+        print(f"\n{C_GREEN}{C_BOLD}✓ Build successful!{C_RESET}")
+        print(f"  • {C_BOLD}Output APK:{C_RESET} {C_ORANGE}{out_apk_path}{C_RESET}")
+        print(f"  • {C_BOLD}Size:{C_RESET}       {size_mb:.2f} MB")
+    else:
+        print(f"\n{C_GREEN}{C_BOLD}✓ Build finished successfully.{C_RESET}")
+
+    # Optional ADB install
+    if install or shutil.which("adb"):
+        if not install:
+            try:
+                ans = input(f"\n{C_CYAN}Would you like to install the APK to your connected phone now? (Y/n): {C_RESET}").strip().lower()
+                install = (ans in ("", "y", "yes"))
+            except (KeyboardInterrupt, EOFError):
+                install = False
+
+        if install and os.path.exists(out_apk_path):
+            adb_bin = shutil.which("adb")
+            if not adb_bin:
+                print(f"{C_RED}ADB not found in PATH. Install with: sudo apt install adb{C_RESET}")
+                return
+
+            print(f"\n{C_CYAN}Checking connected devices via ADB...{C_RESET}")
+            res = subprocess.run([adb_bin, "devices"], capture_output=True, text=True)
+            lines = [l for l in res.stdout.strip().split("\n")[1:] if l.strip() and "\tdevice" in l]
+            if not lines:
+                print(f"{C_GOLD}No authorized device found via ADB. Connect your phone with USB debugging enabled.{C_RESET}")
+                return
+
+            print(f"{C_GREEN}Found device: {lines[0].split()[0]}. Installing...{C_RESET}")
+            install_cmd = [adb_bin, "install", "-r", out_apk_path]
+            i_ret = subprocess.run(install_cmd)
+            if i_ret.returncode == 0:
+                print(f"\n{C_GREEN}{C_BOLD}✓ Shinsei Anime app successfully installed on your phone!{C_RESET}\n")
+            else:
+                print(f"\n{C_RED}ADB installation failed.{C_RESET}\n")
+
+# -----------------------------------------------------------------------------
 # COMMAND: terminal player (The 10x better ani-cli)
 # -----------------------------------------------------------------------------
 async def cmd_terminal(
@@ -975,6 +1056,7 @@ def show_help():
     row("anime-cli", "Open interactive navigation dashboard")
     row("anime-cli <title>", "Search & stream immediately in MPV")
     row("anime-cli -s, --sync", "P2P mobile sync & runner init QR code")
+    row("anime-cli --build-apk", "Compile Android APK & optional install")
     row("anime-cli -c, --continue", "Resume last watched episode")
     row("anime-cli -B, --binge", "Launch Binge Roulette mood selector")
     row("anime-cli --today, --schedule", "View today's live anime release radar")
@@ -1016,6 +1098,7 @@ async def interactive_menu():
         menu_options = [
             "🔍 Search & Watch Anime",
             "⚡ P2P Mobile Sync & Init (QR code for Shinsei App) [-s]",
+            "📱 Build Shinsei Android APK (--build-apk)",
             "🎲 Binge Roulette (Quick 3-Question Match)",
             "📅 Today's Airing Radar (Live Release Schedule)",
             "▶ Continue Watching (Resume last episode)",
@@ -1031,25 +1114,28 @@ async def interactive_menu():
             cmd_sync()
             break
         elif sel == 2:
+            cmd_build_apk()
+            break
+        elif sel == 3:
             from anilab.binge import run_binge_match
             title = await run_binge_match()
             if title:
                 await cmd_terminal(query=title, ep_num=1)
             break
-        elif sel == 3:
+        elif sel == 4:
             from anilab.schedule import run_schedule_radar
             res = await run_schedule_radar()
             if res:
                 title, ep = res
                 await cmd_terminal(query=title, ep_num=ep)
             break
-        elif sel == 4:
+        elif sel == 5:
             await cmd_terminal(continue_last=True)
             break
-        elif sel == 5:
+        elif sel == 6:
             await cmd_terminal(download=True)
             break
-        elif sel == 6:
+        elif sel == 7:
             show_help()
             try:
                 input(f"\n{C_ORANGE}Press Enter to return to menu...{C_RESET}")
@@ -1080,6 +1166,9 @@ def main():
     # Simple flags
     parser.add_argument("query", nargs="?", default=None, help="Anime title to search & watch immediately")
     parser.add_argument("-s", "--sync", dest="sync", action="store_true", help="Start P2P sync server & QR code for Shinsei Mobile App")
+    parser.add_argument("--build-apk", dest="build_apk", action="store_true", help="Build Shinsei Android APK using Gradle")
+    parser.add_argument("--release", dest="release", action="store_true", help="Build release APK instead of debug APK")
+    parser.add_argument("--install", dest="install", action="store_true", help="Automatically install APK to connected phone via ADB after build")
     parser.add_argument("-i", "--init", dest="init", action="store_true", help="Start runner initialization server hosting provider.bundle.js")
     parser.add_argument("-c", "--continue", dest="continue_last", action="store_true", help="Resume last watched anime episode")
     parser.add_argument("-B", "--binge", action="store_true", help="Launch interactive 3-question Binge Roulette")
@@ -1124,6 +1213,8 @@ def main():
         cmd_init(port=args.port)
     elif args.sync or (args.query in ("sync", "-s")):
         cmd_sync(port=args.port)
+    elif args.build_apk or (args.query in ("build-apk", "build", "apk")):
+        cmd_build_apk(release=args.release, install=args.install)
     elif args.server or args.query in ("server", "serve", "stream"):
         cmd_stream(port=args.port, keep_awake=args.keep_awake)
     elif args.binge or (args.query == "binge"):

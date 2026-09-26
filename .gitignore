@@ -25,3 +25,13 @@ logs/
 *.egg-info/
 build/
 dist/
+
+# Android & APK Build Artifacts
+*.apk
+*.ap_
+*.aab
+android/.gradle/
+android/app/build/
+android/.kotlin/
+android/local.properties
+android/*.iml

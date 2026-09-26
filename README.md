@@ -176,6 +176,7 @@ Choose an action >
 | :--- | :--- |
 | `anime-cli` | Open interactive menu dashboard |
 | `anime-cli <title>` | Search & stream immediately in MPV |
+| `anime-cli --build-apk` | Build Shinsei Android APK (`--release` for R8 shrunk, `--install` to deploy) |
 | `anime-cli --sync` | Start P2P sync server & QR code for Shinsei Android app |
 | `anime-cli -b, --browser` | Launch web browser app |
 | `anime-cli -s, --share` | Launch web app with Cloudflare tunnel & QR code |
@@ -190,11 +191,24 @@ Choose an action >
 ---
 
 ### 📦 Building the Android APK
+
+You can build the Shinsei Android APK locally in one command (no prebuilt binaries are stored in the repo):
+
 ```bash
-cd android
-./gradlew assembleDebug
-# Generated APK: android/app/build/outputs/apk/debug/app-debug.apk
+# Option 1: Via anime-cli (Python)
+anime-cli --build-apk                # Builds debug APK
+anime-cli --build-apk --release      # Builds optimized R8 release APK (~13MB)
+anime-cli --build-apk --install      # Builds and automatically deploys to connected phone via ADB
+
+# Option 2: Standalone Shell Script
+./build-apk.sh                       # Debug build
+./build-apk.sh --release             # R8 shrunk release build
+./build-apk.sh --install             # Build and deploy to phone
 ```
+Generated APKs:
+- Debug: `android/app/build/outputs/apk/debug/app-debug.apk`
+- Release: `android/app/build/outputs/apk/release/app-release.apk`
+
 
 ---
 
