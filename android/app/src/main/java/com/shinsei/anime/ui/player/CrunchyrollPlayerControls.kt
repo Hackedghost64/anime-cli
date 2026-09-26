@@ -340,7 +340,8 @@ fun CrunchyrollPlayerControls(
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (skipIntroRange != null && curPos < (skipIntroRange.second + 5000L)) {
+                        // Real AniSkip chips (only rendered when precise AniSkip timestamps are verified)
+                        if (skipIntroRange != null && curPos >= (skipIntroRange.first - 5000L) && curPos <= skipIntroRange.second) {
                             Surface(
                                 onClick = onSkipIntro,
                                 shape = RoundedCornerShape(14.dp),
@@ -356,24 +357,9 @@ fun CrunchyrollPlayerControls(
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                 )
                             }
-                        } else if (curPos < 120_000L) { // First 2 minutes fallback manual 85s skip
-                            Surface(
-                                onClick = { onSeekRelative(85_000L) },
-                                shape = RoundedCornerShape(14.dp),
-                                color = Color.White.copy(alpha = 0.12f),
-                                modifier = Modifier.padding(end = 8.dp)
-                            ) {
-                                Text(
-                                    text = "+85s Intro",
-                                    color = TextPrimary,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
-                            }
                         }
 
-                        if (skipOutroRange != null && curPos >= (skipOutroRange.first - 10000L)) {
+                        if (skipOutroRange != null && curPos >= (skipOutroRange.first - 5000L) && curPos <= skipOutroRange.second) {
                             Surface(
                                 onClick = onSkipOutro,
                                 shape = RoundedCornerShape(14.dp),
@@ -385,20 +371,6 @@ fun CrunchyrollPlayerControls(
                                     color = CrunchyOrange,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
-                            }
-                        } else if (duration > 180_000L && curPos > (duration - 150_000L)) { // Last 2.5 minutes fallback manual 90s skip
-                            Surface(
-                                onClick = { onSeekTo(duration - 5000L) },
-                                shape = RoundedCornerShape(14.dp),
-                                color = Color.White.copy(alpha = 0.12f)
-                            ) {
-                                Text(
-                                    text = "+90s Outro",
-                                    color = TextPrimary,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                 )
                             }

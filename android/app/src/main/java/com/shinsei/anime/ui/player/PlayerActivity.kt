@@ -91,8 +91,8 @@ class PlayerActivity : ComponentActivity() {
     private var animeTitle: String = ""
     private var animePoster: String = ""
     private var epId: String = ""
-    private var epNum: String = "1"
-    private var epName: String = ""
+    private var epNum by androidx.compose.runtime.mutableStateOf("1")
+    private var epName by androidx.compose.runtime.mutableStateOf("")
     private var isDub: Boolean = false
     private var malId: Long = 0L
 
@@ -297,20 +297,38 @@ class PlayerActivity : ComponentActivity() {
 
         // AniSkip intervals
         LaunchedEffect(animeTitle, malId, epNum) {
-            val queryTarget = if (malId > 0) malId.toString() else animeTitle
+            skipIntroRange = null
+            skipOutroRange = null
+            val cleanEp = epNum.replace(Regex("[^0-9]"), "").ifEmpty { "1" }
+            val queryTarget = if (malId > 0) malId.toString() else animeTitle.trim()
             if (queryTarget.isNotEmpty()) {
                 try {
-                    val skipJsonStr = ShinseiApp.instance.scriptRunner.getSkipTimes(queryTarget, epNum)
+                    val skipJsonStr = ShinseiApp.instance.scriptRunner.getSkipTimes(queryTarget, cleanEp)
+                    Log.d("PlayerActivity", "AniSkip response for $queryTarget ep $cleanEp: $skipJsonStr")
                     val skipObj = JSONObject(skipJsonStr)
                     skipObj.optJSONArray("op")?.let { opArr ->
-                        if (opArr.length() >= 2) skipIntroRange =
-                            Pair((opArr.getDouble(0) * 1000).toLong(), (opArr.getDouble(1) * 1000).toLong())
+                        if (opArr.length() >= 2) {
+                            val startMs = (opArr.getDouble(0) * 1000).toLong()
+                            val endMs = (opArr.getDouble(1) * 1000).toLong()
+                            if (endMs > startMs) {
+                                skipIntroRange = Pair(startMs, endMs)
+                                Log.i("PlayerActivity", "AniSkip Intro loaded: $startMs ms -> $endMs ms")
+                            }
+                        }
                     }
                     skipObj.optJSONArray("ed")?.let { edArr ->
-                        if (edArr.length() >= 2) skipOutroRange =
-                            Pair((edArr.getDouble(0) * 1000).toLong(), (edArr.getDouble(1) * 1000).toLong())
+                        if (edArr.length() >= 2) {
+                            val startMs = (edArr.getDouble(0) * 1000).toLong()
+                            val endMs = (edArr.getDouble(1) * 1000).toLong()
+                            if (endMs > startMs) {
+                                skipOutroRange = Pair(startMs, endMs)
+                                Log.i("PlayerActivity", "AniSkip Outro loaded: $startMs ms -> $endMs ms")
+                            }
+                        }
                     }
-                } catch (e: Exception) { /* ignore */ }
+                } catch (e: Exception) {
+                    Log.e("PlayerActivity", "Failed to fetch AniSkip intervals", e)
+                }
             }
         }
 
