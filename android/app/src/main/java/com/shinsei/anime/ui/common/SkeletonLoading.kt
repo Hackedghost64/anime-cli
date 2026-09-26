@@ -207,3 +207,116 @@ fun BrowseSkeletonScreen() {
         }
     }
 }
+
+@Composable
+fun DetailSkeletonScreen() {
+    val brush = shimmerBrush()
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        userScrollEnabled = false
+    ) {
+        // Hero Header Skeleton
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(260.dp)
+                    .background(brush)
+            )
+        }
+
+        // Action Buttons Skeleton
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(brush)
+                )
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(brush)
+                )
+            }
+        }
+
+        // Synopsis Skeleton
+        item {
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(brush)
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(brush)
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.6f)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(brush)
+                )
+            }
+        }
+
+        // Episode List Skeleton Header
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(100.dp)
+                        .height(18.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(brush)
+                )
+                Box(
+                    modifier = Modifier
+                        .width(80.dp)
+                        .height(28.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(brush)
+                )
+            }
+        }
+
+        // Episode Cards Skeletons
+        items(4) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(72.dp)
+                    .padding(horizontal = 16.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(brush)
+            )
+        }
+    }
+}

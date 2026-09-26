@@ -8,6 +8,8 @@ import com.shinsei.anime.data.local.WatchProgressEntity
 import com.shinsei.anime.data.model.AnimeDetail
 import com.shinsei.anime.data.model.EpisodeItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,54 +36,82 @@ class DetailViewModel(application: Application) : AndroidViewModel(application) 
     private val _uiState = MutableStateFlow(DetailUiState())
     val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
 
+    private val detailCache = app.getSharedPreferences("anime_detail_cache", android.content.Context.MODE_PRIVATE)
+
     fun loadAnime(animeId: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            try {
-                // 1. Fetch details
-                val detailJson = scriptRunner.getDetails(animeId)
-                val detail = parseDetail(detailJson, animeId)
+            // Instant load from memory/disk cache if available
+            val cachedDetailJson = detailCache.getString("detail_$animeId", null)
+            val cachedEpJson = detailCache.getString("episodes_$animeId", null)
+            if (!cachedDetailJson.isNullOrEmpty() && !cachedEpJson.isNullOrEmpty()) {
+                try {
+                    val cachedDetail = parseDetail(cachedDetailJson, animeId)
+                    val cachedEpisodes = parseEpisodes(cachedEpJson)
+                    val progressList = dao.getAnimeProgress(animeId)
+                    val progressMap = progressList.associateBy { it.epId }
+                    var resumeEp = computeResumeEpisode(progressList, cachedEpisodes)
 
-                // 2. Fetch episodes
-                val episodesJson = scriptRunner.getEpisodes(animeId)
-                val episodes = parseEpisodes(episodesJson)
-
-                // 3. Fetch saved progress from Room DB
-                val progressList = dao.getAnimeProgress(animeId)
-                val progressMap = progressList.associateBy { it.epId }
-
-                // 4. Determine resume episode
-                var resumeEp: EpisodeItem? = null
-                if (progressList.isNotEmpty() && episodes.isNotEmpty()) {
-                    val latest = progressList.maxByOrNull { it.updatedAt }
-                    if (latest != null) {
-                        val isFinished = latest.duration > 0 && (latest.position / latest.duration) >= 0.88
-                        val curIdx = episodes.indexOfFirst { it.id == latest.epId || it.num == latest.epNum }
-                        if (isFinished && curIdx in 0 until episodes.size - 1) {
-                            resumeEp = episodes[curIdx + 1]
-                        } else if (curIdx >= 0) {
-                            resumeEp = episodes[curIdx]
-                        }
-                    }
-                }
-                if (resumeEp == null && episodes.isNotEmpty()) {
-                    resumeEp = episodes.first()
-                }
-
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    detail = detail,
-                    episodes = episodes,
-                    rawEpisodesJson = episodesJson,
-                    progressMap = progressMap,
-                    resumeEpisode = resumeEp
-                )
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = e.message ?: "Failed to load anime details"
-                )
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        detail = cachedDetail,
+                        episodes = cachedEpisodes,
+                        rawEpisodesJson = cachedEpJson,
+                        progressMap = progressMap,
+                        resumeEpisode = resumeEp
+                    )
+                } catch (_: Exception) {}
+            } else {
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             }
+
+            try {
+                // Fetch details, episodes and watch progress concurrently in parallel!
+                coroutineScope {
+                    val detailDeferred = async { scriptRunner.getDetails(animeId) }
+                    val episodesDeferred = async { scriptRunner.getEpisodes(animeId) }
+                    val progressDeferred = async { dao.getAnimeProgress(animeId) }
+
+                    val detailJson = detailDeferred.await()
+                    val episodesJson = episodesDeferred.await()
+                    val progressList = progressDeferred.await()
+
+                    if (detailJson.isNotEmpty()) detailCache.edit().putString("detail_$animeId", detailJson).apply()
+                    if (episodesJson.isNotEmpty()) detailCache.edit().putString("episodes_$animeId", episodesJson).apply()
+
+                    val detail = parseDetail(detailJson, animeId)
+                    val episodes = parseEpisodes(episodesJson)
+                    val progressMap = progressList.associateBy { it.epId }
+                    val resumeEp = computeResumeEpisode(progressList, episodes)
+
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        detail = detail,
+                        episodes = episodes,
+                        rawEpisodesJson = episodesJson,
+                        progressMap = progressMap,
+                        resumeEpisode = resumeEp
+                    )
+                }
+            } catch (e: Exception) {
+                if (_uiState.value.detail == null) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = e.message ?: "Failed to load anime details"
+                    )
+                }
+            }
+        }
+    }
+
+    private fun computeResumeEpisode(progressList: List<WatchProgressEntity>, episodes: List<EpisodeItem>): EpisodeItem? {
+        if (progressList.isEmpty() || episodes.isEmpty()) return episodes.firstOrNull()
+        val latest = progressList.maxByOrNull { it.updatedAt } ?: return episodes.firstOrNull()
+        val isFinished = latest.duration > 0 && (latest.position / latest.duration) >= 0.88
+        val curIdx = episodes.indexOfFirst { it.id == latest.epId || it.num == latest.epNum }
+        return when {
+            isFinished && curIdx in 0 until episodes.size - 1 -> episodes[curIdx + 1]
+            curIdx >= 0 -> episodes[curIdx]
+            else -> episodes.firstOrNull()
         }
     }
 

@@ -97,14 +97,13 @@ fun DetailScreen(
     val downloadManager = remember { com.shinsei.anime.data.download.DownloadManager.getInstance(context) }
     val episodeDownloads by app.database.downloadDao().observeDownloadsForAnime(animeId).collectAsState(initial = emptyList())
 
-    if (uiState.isLoading) {
+    if (uiState.isLoading && uiState.detail == null) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(BackgroundBlack),
-            contentAlignment = Alignment.Center
+                .background(BackgroundBlack)
         ) {
-            CircularProgressIndicator(color = CrunchyOrange)
+            com.shinsei.anime.ui.common.DetailSkeletonScreen()
         }
         return
     }
