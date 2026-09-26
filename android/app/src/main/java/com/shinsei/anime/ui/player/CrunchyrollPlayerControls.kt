@@ -233,16 +233,17 @@ fun CrunchyrollPlayerControls(
                         )
                     }
 
-                    // NEXT EPISODE [⏭]
-                    if (hasNextEpisode) {
-                        IconButton(onClick = onNextEpisode) {
-                            Icon(
-                                imageVector = Icons.Default.SkipNext,
-                                contentDescription = "Next Episode",
-                                tint = TextPrimary,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
+                    // NEXT EPISODE [⏭] Beside Settings
+                    IconButton(
+                        onClick = onNextEpisode,
+                        enabled = hasNextEpisode
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SkipNext,
+                            contentDescription = "Next Episode",
+                            tint = if (hasNextEpisode) TextPrimary else TextPrimary.copy(alpha = 0.35f),
+                            modifier = Modifier.size(28.dp)
+                        )
                     }
 
                     // SETTINGS [⚙]
@@ -319,67 +320,127 @@ fun CrunchyrollPlayerControls(
                             modifier = Modifier.size(32.dp)
                         )
                     }
-
-                    // Center Next Episode Button
-                    if (hasNextEpisode) {
-                        IconButton(
-                            onClick = onNextEpisode,
-                            modifier = Modifier
-                                .size(54.dp)
-                                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SkipNext,
-                                contentDescription = "Next Episode",
-                                tint = CrunchyOrange,
-                                modifier = Modifier.size(34.dp)
-                            )
-                        }
-                    }
                 }
 
                 // BOTTOM BAR: time + seek slider + duration
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 14.dp)
-                        .align(Alignment.BottomCenter),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 20.dp, vertical = 10.dp)
+                        .align(Alignment.BottomCenter)
                 ) {
-                    Text(
-                        text = formatTime(curPos),
-                        color = TextPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Slider(
-                        value = curPos.toFloat().coerceIn(0f, duration.toFloat()),
-                        onValueChange = {
-                            isDraggingSlider = true
-                            sliderDragPosition = it
-                        },
-                        onValueChangeFinished = {
-                            isDraggingSlider = false
-                            onSeekTo(sliderDragPosition.toLong())
-                        },
-                        valueRange = 0f..duration.toFloat(),
-                        colors = SliderDefaults.colors(
-                            thumbColor = CrunchyOrange,
-                            activeTrackColor = CrunchyOrange,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                        ),
+                    // Quick Intro / Outro helper chips when near start / end
+                    Row(
                         modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 12.dp)
-                    )
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (skipIntroRange != null && curPos < (skipIntroRange.second + 5000L)) {
+                            Surface(
+                                onClick = onSkipIntro,
+                                shape = RoundedCornerShape(14.dp),
+                                color = CrunchyOrange.copy(alpha = 0.2f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, CrunchyOrange),
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Text(
+                                    text = "⚡ Skip Intro",
+                                    color = CrunchyOrange,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                        } else if (curPos < 120_000L) { // First 2 minutes fallback manual 85s skip
+                            Surface(
+                                onClick = { onSeekRelative(85_000L) },
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color.White.copy(alpha = 0.12f),
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Text(
+                                    text = "+85s Intro",
+                                    color = TextPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
 
-                    Text(
-                        text = formatTime(duration),
-                        color = TextSecondary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                        if (skipOutroRange != null && curPos >= (skipOutroRange.first - 10000L)) {
+                            Surface(
+                                onClick = onSkipOutro,
+                                shape = RoundedCornerShape(14.dp),
+                                color = CrunchyOrange.copy(alpha = 0.2f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, CrunchyOrange)
+                            ) {
+                                Text(
+                                    text = "⚡ Skip Outro",
+                                    color = CrunchyOrange,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                        } else if (duration > 180_000L && curPos > (duration - 150_000L)) { // Last 2.5 minutes fallback manual 90s skip
+                            Surface(
+                                onClick = { onSeekTo(duration - 5000L) },
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color.White.copy(alpha = 0.12f)
+                            ) {
+                                Text(
+                                    text = "+90s Outro",
+                                    color = TextPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = formatTime(curPos),
+                            color = TextPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        Slider(
+                            value = curPos.toFloat().coerceIn(0f, duration.toFloat()),
+                            onValueChange = {
+                                isDraggingSlider = true
+                                sliderDragPosition = it
+                            },
+                            onValueChangeFinished = {
+                                isDraggingSlider = false
+                                onSeekTo(sliderDragPosition.toLong())
+                            },
+                            valueRange = 0f..duration.toFloat(),
+                            colors = SliderDefaults.colors(
+                                thumbColor = CrunchyOrange,
+                                activeTrackColor = CrunchyOrange,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 12.dp)
+                        )
+
+                        Text(
+                            text = formatTime(duration),
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
         }

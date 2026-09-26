@@ -373,10 +373,10 @@ fun FeaturedSpotlightBanner(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(200.dp)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .height(230.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(SurfaceDark)
+            .background(SurfaceElevated)
             .clickable(onClick = onWatchClick)
     ) {
         AsyncImage(
@@ -386,6 +386,7 @@ fun FeaturedSpotlightBanner(
             contentScale = ContentScale.Crop
         )
 
+        // Multi-stop Cinematic Gradient Scrim
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -393,8 +394,9 @@ fun FeaturedSpotlightBanner(
                     androidx.compose.ui.graphics.Brush.verticalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color.Black.copy(alpha = 0.5f),
-                            Color.Black.copy(alpha = 0.95f)
+                            Color.Black.copy(alpha = 0.3f),
+                            Color.Black.copy(alpha = 0.85f),
+                            Color.Black.copy(alpha = 0.98f)
                         )
                     )
                 )
@@ -403,32 +405,53 @@ fun FeaturedSpotlightBanner(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(14.dp)
+                .padding(16.dp)
         ) {
-            Surface(
-                shape = RoundedCornerShape(4.dp),
-                color = CrunchyOrange,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(bottom = 6.dp)
             ) {
-                Text(
-                    text = "FEATURED SPOTLIGHT",
-                    color = Color.Black,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 10.sp,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = CrunchyOrange
+                ) {
+                    Text(
+                        text = "FEATURED SPOTLIGHT",
+                        color = Color.Black,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 10.sp,
+                        letterSpacing = 0.5.sp,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+
+                if (anime.type.isNotEmpty()) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color.White.copy(alpha = 0.2f)
+                    ) {
+                        Text(
+                            text = anime.type.uppercase(),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
             }
 
             Text(
                 text = anime.title,
                 color = Color.White,
-                fontSize = 18.sp,
+                fontSize = 19.sp,
                 fontWeight = FontWeight.Black,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
@@ -436,7 +459,7 @@ fun FeaturedSpotlightBanner(
                     color = CrunchyOrange
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -447,21 +470,22 @@ fun FeaturedSpotlightBanner(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "WATCH NOW",
+                            text = "START WATCHING",
                             color = Color.Black,
                             fontWeight = FontWeight.Black,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
+                            letterSpacing = 0.5.sp
                         )
                     }
                 }
 
                 if (anime.score.isNotEmpty()) {
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = "★ ${anime.score}",
                         color = AmberGlow,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
+                        fontSize = 14.sp
                     )
                 }
             }
