@@ -350,7 +350,7 @@ fun DetailScreen(
         }
 
         // Episode List Items
-        items(uiState.episodes) { ep ->
+        items(uiState.episodes, key = { it.id }) { ep ->
             val progress = uiState.progressMap[ep.id]
             val isWatched = progress != null && progress.duration > 0 &&
                     (progress.position / progress.duration) >= 0.88

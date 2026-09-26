@@ -691,7 +691,7 @@ fun SearchFeedGrid(
             verticalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            items(results) { card ->
+            items(results, key = { it.id }) { card ->
                 AnimeCardItem(card = card, onClick = { onAnimeClick(card.id) })
             }
         }

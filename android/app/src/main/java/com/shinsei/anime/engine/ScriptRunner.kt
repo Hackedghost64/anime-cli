@@ -2,6 +2,7 @@ package com.shinsei.anime.engine
 
 import android.annotation.SuppressLint
 import android.content.Context
+import com.shinsei.anime.ShinseiApp
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -37,11 +38,12 @@ class ScriptRunner(private val context: Context) {
     private val pendingRequests = ConcurrentHashMap<String, CompletableDeferred<String>>()
     private var initDeferred = CompletableDeferred<Boolean>()
 
-    private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .build()
+    private val okHttpClient: OkHttpClient
+        get() = (context.applicationContext as? ShinseiApp)?.sharedOkHttpClient ?: OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .build()
 
     private val bridge = object {
         @JavascriptInterface

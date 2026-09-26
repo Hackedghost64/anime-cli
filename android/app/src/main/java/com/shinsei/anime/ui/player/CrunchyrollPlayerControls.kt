@@ -152,6 +152,9 @@ fun CrunchyrollPlayerControls(
         }
 
         // Main Controls Overlay
+        val topGradient = remember { Brush.verticalGradient(colors = listOf(PlayerTopScrim, Color.Transparent)) }
+        val bottomGradient = remember { Brush.verticalGradient(colors = listOf(Color.Transparent, PlayerBottomScrim)) }
+
         AnimatedVisibility(
             visible = controlsVisible,
             enter = fadeIn(tween(250)),
@@ -163,7 +166,7 @@ fun CrunchyrollPlayerControls(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(110.dp)
-                        .background(Brush.verticalGradient(colors = listOf(PlayerTopScrim, Color.Transparent)))
+                        .background(topGradient)
                         .align(Alignment.TopCenter)
                 )
 
@@ -172,7 +175,7 @@ fun CrunchyrollPlayerControls(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(130.dp)
-                        .background(Brush.verticalGradient(colors = listOf(Color.Transparent, PlayerBottomScrim)))
+                        .background(bottomGradient)
                         .align(Alignment.BottomCenter)
                 )
 
@@ -594,5 +597,7 @@ private fun formatTime(ms: Long): String {
     val totalSec = ms / 1000
     val m = totalSec / 60
     val s = totalSec % 60
-    return String.format("%02d:%02d", m, s)
+    val mStr = if (m < 10) "0$m" else "$m"
+    val sStr = if (s < 10) "0$s" else "$s"
+    return "$mStr:$sStr"
 }

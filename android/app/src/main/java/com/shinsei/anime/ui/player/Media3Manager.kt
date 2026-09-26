@@ -61,18 +61,19 @@ class Media3Manager(
     }
 
     private fun createPlayer(): ExoPlayer {
-        // Optimized 2.5s start buffer and 30s max buffer for instantaneous streaming
+        // Optimized 1.5s start buffer, 30s max buffer, and 30s back-buffer for instantaneous seek-rewinds
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
                 15_000, // minBufferMs
                 30_000, // maxBufferMs
-                2_500,  // bufferForPlaybackMs (instant start)
-                4_000   // bufferForPlaybackAfterRebufferMs
+                1_500,  // bufferForPlaybackMs (instant start)
+                3_000   // bufferForPlaybackAfterRebufferMs
             )
+            .setBackBuffer(30_000, true) // 30s back-buffer for instant 10s rewinds without re-buffering
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
-        val player = ExoPlayer.Builder(context)
+        val player = ExoPlayer.Builder(context.applicationContext)
             .setLoadControl(loadControl)
             .setSeekBackIncrementMs(10_000)
             .setSeekForwardIncrementMs(10_000)

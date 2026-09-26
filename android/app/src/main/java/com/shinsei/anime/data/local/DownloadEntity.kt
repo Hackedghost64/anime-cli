@@ -1,9 +1,13 @@
 package com.shinsei.anime.data.local
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "downloads")
+@Entity(
+    tableName = "downloads",
+    indices = [Index(value = ["animeId"]), Index(value = ["status"])]
+)
 data class DownloadEntity(
     @PrimaryKey
     val id: String, // "${animeId}_${epId}"

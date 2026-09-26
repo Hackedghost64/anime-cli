@@ -12,7 +12,15 @@ interface WatchProgressDao {
     @Query("SELECT * FROM watch_progress ORDER BY updatedAt DESC")
     fun observeAllProgress(): Flow<List<WatchProgressEntity>>
 
-    @Query("SELECT wp.* FROM watch_progress wp WHERE wp.updatedAt = (SELECT MAX(w2.updatedAt) FROM watch_progress w2 WHERE w2.animeId = wp.animeId) ORDER BY wp.updatedAt DESC")
+    @Query("""
+        SELECT wp.* FROM watch_progress wp
+        INNER JOIN (
+            SELECT animeId, MAX(updatedAt) AS maxUpdated
+            FROM watch_progress
+            GROUP BY animeId
+        ) latest ON wp.animeId = latest.animeId AND wp.updatedAt = latest.maxUpdated
+        ORDER BY wp.updatedAt DESC
+    """)
     fun observeLatestPerSeries(): Flow<List<WatchProgressEntity>>
 
     @Query("SELECT * FROM watch_progress ORDER BY updatedAt DESC")

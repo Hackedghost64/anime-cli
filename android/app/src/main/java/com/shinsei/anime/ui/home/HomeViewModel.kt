@@ -45,20 +45,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val cachePrefs = app.getSharedPreferences("home_feed_cache", android.content.Context.MODE_PRIVATE)
 
     init {
-        // Instant load from disk cache first
-        val cachedJson = cachePrefs.getString("cached_home_json", null)
-        if (!cachedJson.isNullOrEmpty()) {
-            try {
-                val parsed = parseHomeFeed(cachedJson)
-                _uiState.value = _uiState.value.copy(
-                    spotlight = parsed.spotlight,
-                    spotlightCards = parsed.spotlightCards,
-                    rails = parsed.rails,
-                    trending = parsed.trending
-                )
-            } catch (_: Exception) {}
+        // Offload disk cache read and JSON parsing to IO to avoid blocking main thread at startup
+        viewModelScope.launch(Dispatchers.IO) {
+            val cachedJson = cachePrefs.getString("cached_home_json", null)
+            if (!cachedJson.isNullOrEmpty()) {
+                try {
+                    val parsed = parseHomeFeed(cachedJson)
+                    _uiState.value = _uiState.value.copy(
+                        spotlight = parsed.spotlight,
+                        spotlightCards = parsed.spotlightCards,
+                        rails = parsed.rails,
+                        trending = parsed.trending
+                    )
+                } catch (_: Exception) {}
+            }
+            loadHomeFeed()
         }
-        loadHomeFeed()
     }
 
     fun loadHomeFeed() {

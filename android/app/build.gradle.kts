@@ -20,11 +20,15 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -81,9 +85,8 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.4.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
 
-    // OkHttp & JSON
+    // OkHttp
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.json:json:20231013")
 
     // Room DB
     val roomVersion = "2.6.1"
