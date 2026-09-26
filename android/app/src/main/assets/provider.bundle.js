@@ -6,7 +6,7 @@
 (function(exports) {
   'use strict';
 
-  exports.version = "1.2.0";
+  exports.version = "1.3.0";
 
   const ANILAB_BASE = "https://anilab2.amdapi.click/api";
   const KYOTO_BASE = "https://app.kyotoplayer.com/api/v4";
@@ -56,7 +56,7 @@
       const spotlight = [];
       const rails = [];
 
-      // 1. Featured Spotlight Banner
+      // 1. Featured Spotlight Banner (Top item)
       if (data.featured && (data.featured.id || data.featured.title)) {
         const feat = data.featured;
         postCache.set(String(feat.id), feat);
@@ -74,9 +74,20 @@
 
       // 2. Sections (Spotlight, Trending, Most Popular, Top Airing, etc.)
       const sections = Array.isArray(data.sections) ? data.sections : [];
-      
-      // Collect IDs to hydrate in parallel (up to 20 unique items across sections)
+
+      // Find the official Spotlight section (up to 15 items for the hero carousel)
+      const spotlightSec = sections.find(s => s.name && s.name.toLowerCase() === 'spotlight');
+      const spotlightPosts = (spotlightSec && Array.isArray(spotlightSec.posts)) ? spotlightSec.posts.slice(0, 15) : [];
+
+      // Collect IDs to hydrate in parallel
       const idsToHydrate = [];
+      for (const p of spotlightPosts) {
+        const pid = String(p.id);
+        if (pid && !postCache.has(pid) && !idsToHydrate.includes(pid)) {
+          idsToHydrate.push(pid);
+        }
+      }
+
       for (const sec of sections) {
         for (const p of (sec.posts || []).slice(0, 8)) {
           const pid = String(p.id);
@@ -96,6 +107,23 @@
             }
           } catch {}
         }));
+      }
+
+      // Populate full spotlight carousel items from the Spotlight section
+      for (const p of spotlightPosts) {
+        const pid = String(p.id);
+        if (spotlight.some(s => s.id === pid)) continue;
+        const cached = postCache.get(pid);
+        spotlight.push({
+          id: pid,
+          title: cached?.title || p.title || p.name || "Featured Anime",
+          poster: cached?.poster || p.poster || "",
+          backdrop: cached?.backdrop || cached?.poster || p.poster || "",
+          synopsis: cached?.synopsis || "",
+          score: cached?.rating || p.score || "",
+          type: cached?.type || p.type || "TV",
+          genres: cached?.genres || []
+        });
       }
 
       for (const sec of sections) {

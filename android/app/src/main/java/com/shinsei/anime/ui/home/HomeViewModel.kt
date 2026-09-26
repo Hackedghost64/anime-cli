@@ -150,7 +150,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val allSpotlightCards = mutableListOf<AnimeCard>()
             val spotlightArr = root.optJSONArray("spotlight")
             if (spotlightArr != null && spotlightArr.length() > 0) {
-                for (si in 0 until minOf(spotlightArr.length(), 6)) {
+                for (si in 0 until minOf(spotlightArr.length(), 15)) {
                     val obj = spotlightArr.getJSONObject(si)
                     val id = obj.optString("id", "")
                     if (id.isNotEmpty()) {

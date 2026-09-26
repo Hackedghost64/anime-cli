@@ -46,6 +46,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -239,6 +240,18 @@ fun MainCatalogFeed(
         if (carouselItems.isNotEmpty()) {
             item {
                 val pagerState = rememberPagerState(pageCount = { carouselItems.size })
+
+                // Auto-advance spotlight banner every 6 seconds if not being dragged
+                LaunchedEffect(carouselItems.size) {
+                    while (true) {
+                        kotlinx.coroutines.delay(6000L)
+                        if (!pagerState.isScrollInProgress && carouselItems.isNotEmpty()) {
+                            val nextPage = (pagerState.currentPage + 1) % carouselItems.size
+                            pagerState.animateScrollToPage(nextPage)
+                        }
+                    }
+                }
+
                 Column {
                     HorizontalPager(
                         state = pagerState,
@@ -257,15 +270,16 @@ fun MainCatalogFeed(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .wrapContentHeight()
-                                .padding(top = 6.dp, bottom = 2.dp),
-                            horizontalArrangement = Arrangement.Center
+                                .padding(top = 8.dp, bottom = 4.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             repeat(carouselItems.size) { idx ->
                                 val selected = pagerState.currentPage == idx
                                 Box(
                                     modifier = Modifier
                                         .padding(horizontal = 3.dp)
-                                        .size(if (selected) 8.dp else 5.dp)
+                                        .size(if (selected) 8.dp else 4.dp)
                                         .clip(CircleShape)
                                         .background(if (selected) CrunchyOrange else Color.White.copy(alpha = 0.35f))
                                 )
