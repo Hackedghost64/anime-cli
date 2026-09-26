@@ -206,6 +206,10 @@ class ScriptRunner(private val context: Context) {
             "https://raw.githubusercontent.com/Hackedghost64/anime-cli/main/android/app/src/main/assets/provider.bundle.js"
     }
 
+    private val prefs by lazy {
+        context.getSharedPreferences("shinsei_provider_prefs", Context.MODE_PRIVATE)
+    }
+
     private fun loadScript(): String {
         val bundled = context.assets.open("provider.bundle.js").use { inputStream ->
             InputStreamReader(inputStream).readText()
@@ -219,16 +223,20 @@ class ScriptRunner(private val context: Context) {
                 val cachedVer = extractVersion(cached)
                 if (isNewerVersion(cachedVer, bundledVer)) {
                     Log.i(tag, "Using newer OTA cached script v$cachedVer (bundled is v$bundledVer)")
+                    prefs.edit().putString("active_bundle_version", cachedVer).apply()
                     return cached
                 } else {
                     Log.i(tag, "Bundled script v$bundledVer >= cached v$cachedVer, clearing stale cache")
                     hotScriptFile.delete()
+                    prefs.edit().putString("active_bundle_version", bundledVer).apply()
                 }
             } catch (e: Exception) {
                 Log.w(tag, "Failed to read cached script, using bundled", e)
                 hotScriptFile.delete()
             }
         }
+        val bundledVer = extractVersion(bundled)
+        prefs.edit().putString("active_bundle_version", bundledVer).apply()
         return bundled
     }
 
@@ -253,24 +261,30 @@ class ScriptRunner(private val context: Context) {
     }
 
     private suspend fun checkForRemoteUpdate() {
+        // Throttle checks: don't contact GitHub if checked within last 12 hours
+        val lastCheck = prefs.getLong("last_ota_check_time", 0L)
+        val now = System.currentTimeMillis()
+        if (now - lastCheck < 12 * 60 * 60 * 1000L) {
+            Log.d(tag, "OTA check throttled (last checked ${(now - lastCheck) / (60 * 1000)} mins ago)")
+            return
+        }
+
         try {
+            prefs.edit().putLong("last_ota_check_time", now).apply()
             val req = Request.Builder().url(GITHUB_SCRIPT_URL).build()
             val resp = okHttpClient.newCall(req).execute()
             resp.use { response ->
                 if (response.isSuccessful) {
                     val remoteCode = response.body?.string() ?: return
                     if (remoteCode.contains("ShinseiProvider") && remoteCode.length > 2000) {
-                        val bundled = context.assets.open("provider.bundle.js").use { InputStreamReader(it).readText() }
-                        val currentCode = File(context.filesDir, "provider.bundle.js").let {
-                            if (it.exists() && it.length() > 0) it.readText() else bundled
-                        }
-                        val currentVer = extractVersion(currentCode)
+                        val currentVer = prefs.getString("active_bundle_version", "1.0.0") ?: "1.0.0"
                         val remoteVer = extractVersion(remoteCode)
                         if (isNewerVersion(remoteVer, currentVer)) {
                             Log.i(tag, "OTA: newer bundle v$remoteVer found (current: v$currentVer). Caching...")
+                            prefs.edit().putString("active_bundle_version", remoteVer).apply()
                             updateScript(remoteCode)
                         } else {
-                            Log.d(tag, "OTA: bundle up to date (v$currentVer)")
+                            Log.d(tag, "OTA: bundle up to date (current: v$currentVer, remote: v$remoteVer)")
                         }
                     }
                 }

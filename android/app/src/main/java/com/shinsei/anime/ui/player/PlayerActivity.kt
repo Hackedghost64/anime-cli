@@ -72,10 +72,15 @@ import com.shinsei.anime.ui.theme.SurfaceElevated
 import com.shinsei.anime.ui.theme.TextMuted
 import com.shinsei.anime.ui.theme.TextPrimary
 import com.shinsei.anime.ui.theme.TextSecondary
+import android.util.Log
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -91,8 +96,8 @@ class PlayerActivity : ComponentActivity() {
     private var isDub: Boolean = false
     private var malId: Long = 0L
 
-    private var episodesList = mutableListOf<JSONObject>()
-    private var currentEpIndex = 0
+    private val episodesList = androidx.compose.runtime.mutableStateListOf<JSONObject>()
+    private var currentEpIndex by androidx.compose.runtime.mutableIntStateOf(0)
 
     private var isPipMode = false
     private var autoSaveJob: Job? = null
@@ -125,6 +130,32 @@ class PlayerActivity : ComponentActivity() {
             }
         } catch (e: Exception) {
             // ignore
+        }
+
+        // If launched without full episodes list (e.g., from Continue Watching), fetch full episode list in background
+        if (episodesList.isEmpty() && animeId.isNotEmpty()) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    val epJson = ShinseiApp.instance.scriptRunner.getEpisodes(animeId)
+                    val arr = JSONArray(epJson)
+                    val loaded = mutableListOf<JSONObject>()
+                    var matchedIdx = 0
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        loaded.add(obj)
+                        if (obj.optString("id") == epId || obj.optString("num") == epNum) {
+                            matchedIdx = i
+                        }
+                    }
+                    withContext(Dispatchers.Main) {
+                        episodesList.clear()
+                        episodesList.addAll(loaded)
+                        currentEpIndex = matchedIdx
+                    }
+                } catch (e: Exception) {
+                    Log.d("PlayerActivity", "Failed to fetch episodes list: ${e.message}")
+                }
+            }
         }
 
         media3Manager = Media3Manager(this, lifecycleScope)

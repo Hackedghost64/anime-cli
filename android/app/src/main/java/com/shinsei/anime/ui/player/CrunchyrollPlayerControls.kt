@@ -319,6 +319,23 @@ fun CrunchyrollPlayerControls(
                             modifier = Modifier.size(32.dp)
                         )
                     }
+
+                    // Center Next Episode Button
+                    if (hasNextEpisode) {
+                        IconButton(
+                            onClick = onNextEpisode,
+                            modifier = Modifier
+                                .size(54.dp)
+                                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SkipNext,
+                                contentDescription = "Next Episode",
+                                tint = CrunchyOrange,
+                                modifier = Modifier.size(34.dp)
+                            )
+                        }
+                    }
                 }
 
                 // BOTTOM BAR: time + seek slider + duration

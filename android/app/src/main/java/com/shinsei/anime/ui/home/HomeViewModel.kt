@@ -42,15 +42,36 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
+    private val cachePrefs = app.getSharedPreferences("home_feed_cache", android.content.Context.MODE_PRIVATE)
+
     init {
+        // Instant load from disk cache first
+        val cachedJson = cachePrefs.getString("cached_home_json", null)
+        if (!cachedJson.isNullOrEmpty()) {
+            try {
+                val parsed = parseHomeFeed(cachedJson)
+                _uiState.value = _uiState.value.copy(
+                    spotlight = parsed.spotlight,
+                    spotlightCards = parsed.spotlightCards,
+                    rails = parsed.rails,
+                    trending = parsed.trending
+                )
+            } catch (_: Exception) {}
+        }
         loadHomeFeed()
     }
 
     fun loadHomeFeed() {
         viewModelScope.launch(Dispatchers.IO) {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            val hasExistingData = _uiState.value.rails.isNotEmpty() || _uiState.value.spotlight != null
+            if (!hasExistingData) {
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            }
             try {
                 val homeJsonStr = scriptRunner.getHome()
+                if (homeJsonStr.isNotEmpty() && homeJsonStr.contains("spotlight")) {
+                    cachePrefs.edit().putString("cached_home_json", homeJsonStr).apply()
+                }
                 val parsed = parseHomeFeed(homeJsonStr)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -62,7 +83,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.message ?: "Failed to load catalog"
+                    error = if (!hasExistingData) (e.message ?: "Failed to load catalog") else null
                 )
             }
         }

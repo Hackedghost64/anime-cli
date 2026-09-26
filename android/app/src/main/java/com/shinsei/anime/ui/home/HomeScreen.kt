@@ -189,21 +189,18 @@ fun HomeScreen(
                 .padding(horizontal = 16.dp, vertical = 6.dp)
         )
 
-        if (uiState.isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = CrunchyOrange)
-            }
+        if (uiState.isLoading && uiState.rails.isEmpty() && uiState.spotlight == null) {
+            com.shinsei.anime.ui.common.HomeSkeletonScreen()
         } else if (uiState.isSearching) {
-            // Search Results Grid
-            SearchFeedGrid(
-                results = uiState.searchResults,
-                onAnimeClick = onNavigateToDetail
-            )
+            if (uiState.isLoading) {
+                com.shinsei.anime.ui.common.BrowseSkeletonScreen()
+            } else {
+                // Search Results Grid
+                SearchFeedGrid(
+                    results = uiState.searchResults,
+                    onAnimeClick = onNavigateToDetail
+                )
+            }
         } else {
             // Main Catalog Feed with Continue Watching Shelf
             MainCatalogFeed(

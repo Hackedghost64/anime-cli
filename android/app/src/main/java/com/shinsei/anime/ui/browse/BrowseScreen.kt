@@ -173,15 +173,8 @@ fun BrowseScreen(
         }
 
         // Content
-        if (uiState.isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = CrunchyOrange)
-            }
+        if (uiState.isLoading && uiState.trending.isEmpty() && uiState.searchResults.isEmpty()) {
+            com.shinsei.anime.ui.common.BrowseSkeletonScreen()
         } else {
             val displayList = if (uiState.isSearching) uiState.searchResults else uiState.trending
 

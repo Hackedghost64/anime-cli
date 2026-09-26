@@ -21,6 +21,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,12 +71,14 @@ class MainActivity : ComponentActivity() {
     private val homeViewModel: HomeViewModel by viewModels()
     private val detailViewModel: DetailViewModel by viewModels()
 
-    private var pendingDetailAnimeId: String? = null
+    private val pendingDetailAnimeId = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        pendingDetailAnimeId = intent.getStringExtra("open_detail_anime_id")
+        intent.getStringExtra("open_detail_anime_id")?.let {
+            pendingDetailAnimeId.value = it
+        }
 
         setContent {
             ShinseiAnimeTheme {
@@ -91,9 +95,8 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val animeId = intent.getStringExtra("open_detail_anime_id")
-        if (!animeId.isNullOrEmpty()) {
-            pendingDetailAnimeId = animeId
+        intent.getStringExtra("open_detail_anime_id")?.let {
+            pendingDetailAnimeId.value = it
         }
     }
 
@@ -102,11 +105,13 @@ class MainActivity : ComponentActivity() {
         val navController = rememberNavController()
         var showSyncSheet by remember { mutableStateOf(false) }
 
+        val detailTarget by pendingDetailAnimeId.collectAsState()
+
         // Handle "View All Episodes" navigation from PlayerActivity
-        androidx.compose.runtime.LaunchedEffect(Unit) {
-            val id = pendingDetailAnimeId
+        androidx.compose.runtime.LaunchedEffect(detailTarget) {
+            val id = detailTarget
             if (!id.isNullOrEmpty()) {
-                pendingDetailAnimeId = null
+                pendingDetailAnimeId.value = null
                 navController.navigate("detail/$id")
             }
         }
