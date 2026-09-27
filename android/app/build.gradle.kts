@@ -98,6 +98,12 @@ dependencies {
     // Coil Image Loading
     implementation("io.coil-kt:coil-compose:2.7.0")
 
+    // Adaptive Layout (Tablet / Landscape support)
+    implementation("androidx.compose.material3.adaptive:adaptive:1.1.0")
+    implementation("androidx.compose.material3.adaptive:adaptive-layout:1.1.0")
+    implementation("androidx.compose.material3.adaptive:adaptive-navigation:1.1.0")
+    implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.3.1")
+
     // CameraX & MLKit Barcode Scanning for P2P QR Scanner
     val cameraVersion = "1.3.4"
     implementation("androidx.camera:camera-camera2:$cameraVersion")

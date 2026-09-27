@@ -7,6 +7,7 @@ import com.shinsei.anime.ShinseiApp
 import com.shinsei.anime.data.local.WatchProgressEntity
 import com.shinsei.anime.data.model.AnimeDetail
 import com.shinsei.anime.data.model.EpisodeItem
+import com.shinsei.anime.data.model.SeasonItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -24,6 +25,7 @@ data class DetailUiState(
     val rawEpisodesJson: String = "[]",
     val progressMap: Map<String, WatchProgressEntity> = emptyMap(),
     val resumeEpisode: EpisodeItem? = null,
+    val selectedSeasonId: String? = null,
     val error: String? = null
 )
 
@@ -57,7 +59,8 @@ class DetailViewModel(application: Application) : AndroidViewModel(application) 
                         episodes = cachedEpisodes,
                         rawEpisodesJson = cachedEpJson,
                         progressMap = progressMap,
-                        resumeEpisode = resumeEp
+                        resumeEpisode = resumeEp,
+                        selectedSeasonId = animeId
                     )
                 } catch (_: Exception) {}
             } else {
@@ -89,7 +92,8 @@ class DetailViewModel(application: Application) : AndroidViewModel(application) 
                         episodes = episodes,
                         rawEpisodesJson = episodesJson,
                         progressMap = progressMap,
-                        resumeEpisode = resumeEp
+                        resumeEpisode = resumeEp,
+                        selectedSeasonId = animeId
                     )
                 }
             } catch (e: Exception) {
@@ -99,6 +103,53 @@ class DetailViewModel(application: Application) : AndroidViewModel(application) 
                         error = e.message ?: "Failed to load anime details"
                     )
                 }
+            }
+        }
+    }
+
+    fun switchSeason(seasonId: String) {
+        val currentState = _uiState.value
+        if (seasonId == currentState.selectedSeasonId) return
+        
+        _uiState.value = currentState.copy(
+            isLoading = true,
+            selectedSeasonId = seasonId
+        )
+        
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                coroutineScope {
+                    val detailDeferred = async { scriptRunner.getDetails(seasonId) }
+                    val episodesDeferred = async { scriptRunner.getEpisodes(seasonId) }
+                    val progressDeferred = async { dao.getAnimeProgress(seasonId) }
+
+                    val detailJson = detailDeferred.await()
+                    val episodesJson = episodesDeferred.await()
+                    val progressList = progressDeferred.await()
+
+                    if (detailJson.isNotEmpty()) detailCache.edit().putString("detail_$seasonId", detailJson).apply()
+                    if (episodesJson.isNotEmpty()) detailCache.edit().putString("episodes_$seasonId", episodesJson).apply()
+
+                    val detail = parseDetail(detailJson, seasonId)
+                    val episodes = parseEpisodes(episodesJson)
+                    val progressMap = progressList.associateBy { it.epId }
+                    val resumeEp = computeResumeEpisode(progressList, episodes)
+
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        detail = detail,
+                        episodes = episodes,
+                        rawEpisodesJson = episodesJson,
+                        progressMap = progressMap,
+                        resumeEpisode = resumeEp,
+                        selectedSeasonId = seasonId
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = e.message ?: "Failed to load season"
+                )
             }
         }
     }
@@ -125,6 +176,20 @@ class DetailViewModel(application: Application) : AndroidViewModel(application) 
                     genres.add(genresArr.getString(i))
                 }
             }
+            val seasonsArr = obj.optJSONArray("seasons")
+            val seasons = mutableListOf<SeasonItem>()
+            if (seasonsArr != null) {
+                for (i in 0 until seasonsArr.length()) {
+                    val s = seasonsArr.getJSONObject(i)
+                    seasons.add(
+                        SeasonItem(
+                            id = s.optString("id", ""),
+                            title = s.optString("title", "Season ${i + 1}"),
+                            seasonNumber = s.optInt("seasonNumber", i + 1)
+                        )
+                    )
+                }
+            }
             AnimeDetail(
                 id = obj.optString("id", fallbackId),
                 title = obj.optString("title", "Anime $fallbackId"),
@@ -133,7 +198,8 @@ class DetailViewModel(application: Application) : AndroidViewModel(application) 
                 score = obj.optString("score", ""),
                 type = obj.optString("type", "TV"),
                 genres = genres,
-                malId = obj.optLong("mal_id", 0L)
+                malId = obj.optLong("mal_id", 0L),
+                seasons = seasons
             )
         } catch (e: Exception) {
             AnimeDetail(id = fallbackId, title = "Anime $fallbackId", poster = "")

@@ -193,13 +193,13 @@ fun BrowseScreen(
                 }
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
+                    columns = GridCells.Adaptive(minSize = 130.dp),
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 12.dp),
                     contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     items(displayList, key = { it.id }) { anime ->
                         CatalogCard(

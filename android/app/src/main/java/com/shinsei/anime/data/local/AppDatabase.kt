@@ -6,14 +6,15 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [WatchProgressEntity::class, DownloadEntity::class],
-    version = 3,
+    entities = [WatchProgressEntity::class, DownloadEntity::class, WatchlistEntity::class],
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun watchProgressDao(): WatchProgressDao
     abstract fun downloadDao(): DownloadDao
+    abstract fun watchlistDao(): WatchlistDao
 
     companion object {
         @Volatile

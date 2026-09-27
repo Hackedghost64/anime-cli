@@ -4,7 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -27,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -71,6 +75,12 @@ import com.shinsei.anime.ui.theme.SurfaceElevated
 import com.shinsei.anime.ui.theme.TextMuted
 import com.shinsei.anime.ui.theme.TextPrimary
 import com.shinsei.anime.ui.theme.TextSecondary
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -306,6 +316,140 @@ fun DetailScreen(
                     )
                 }
 
+                // Watchlist Bookmark
+                Spacer(modifier = Modifier.height(10.dp))
+                val watchlistDao = app.database.watchlistDao()
+                val isInWatchlist by watchlistDao.observeIsInWatchlist(animeId).collectAsState(initial = false)
+                var showStatusSheet by remember { mutableStateOf(false) }
+
+                Surface(
+                    onClick = {
+                        if (isInWatchlist) showStatusSheet = true
+                        else {
+                            kotlinx.coroutines.MainScope().launch {
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    watchlistDao.upsert(
+                                        com.shinsei.anime.data.local.WatchlistEntity(
+                                            animeId = detail.id,
+                                            title = detail.title,
+                                            poster = detail.poster,
+                                            animeType = detail.type
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    color = SurfaceElevated,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isInWatchlist) CrunchyOrange else SurfaceBorder),
+                    modifier = Modifier.fillMaxWidth().height(44.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (isInWatchlist) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            contentDescription = "Watchlist",
+                            tint = if (isInWatchlist) CrunchyOrange else TextSecondary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isInWatchlist) "IN MY LIST" else "ADD TO MY LIST",
+                            color = if (isInWatchlist) CrunchyOrange else TextSecondary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                }
+
+                if (showStatusSheet) {
+                    ModalBottomSheet(
+                        onDismissRequest = { showStatusSheet = false },
+                        containerColor = SurfaceDark
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp)
+                        ) {
+                            Text("Set Watch Status", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            data class StatusOption(val emoji: String, val status: String, val label: String)
+                            val options = listOf(
+                                StatusOption("📺", com.shinsei.anime.data.local.WatchlistEntity.STATUS_WATCHING, "Watching"),
+                                StatusOption("📋", com.shinsei.anime.data.local.WatchlistEntity.STATUS_PLAN_TO_WATCH, "Plan to Watch"),
+                                StatusOption("✅", com.shinsei.anime.data.local.WatchlistEntity.STATUS_COMPLETED, "Completed"),
+                                StatusOption("⏸\uFE0F", com.shinsei.anime.data.local.WatchlistEntity.STATUS_ON_HOLD, "On Hold"),
+                                StatusOption("❌", com.shinsei.anime.data.local.WatchlistEntity.STATUS_DROPPED, "Dropped")
+                            )
+
+                            options.forEach { opt ->
+                                Surface(
+                                    onClick = {
+                                        showStatusSheet = false
+                                        kotlinx.coroutines.MainScope().launch {
+                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                watchlistDao.upsert(
+                                                    com.shinsei.anime.data.local.WatchlistEntity(
+                                                        animeId = detail.id,
+                                                        title = detail.title,
+                                                        poster = detail.poster,
+                                                        animeType = detail.type,
+                                                        status = opt.status,
+                                                        updatedAt = System.currentTimeMillis() / 1000
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = SurfaceElevated,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(opt.emoji, fontSize = 18.sp)
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(opt.label, color = TextPrimary, fontWeight = FontWeight.Medium, fontSize = 15.sp)
+                                    }
+                                }
+                            }
+
+                            // Remove from watchlist option
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                onClick = {
+                                    showStatusSheet = false
+                                    kotlinx.coroutines.MainScope().launch {
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                            watchlistDao.delete(detail.id)
+                                        }
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFF2D1515),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("🗑\uFE0F", fontSize = 18.sp)
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text("Remove from My List", color = Color(0xFFEF5350), fontWeight = FontWeight.Medium, fontSize = 15.sp)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
+                    }
+                }
+
                 // Synopsis
                 if (detail.synopsis.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
@@ -317,6 +461,107 @@ fun DetailScreen(
                         maxLines = 4,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
+
+                // Season Picker (only for multi-season series)
+                if (detail.seasons.size > 1) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    var showSeasonSheet by remember { mutableStateOf(false) }
+                    val currentSeason = detail.seasons.find { it.id == uiState.selectedSeasonId }
+                        ?: detail.seasons.firstOrNull()
+
+                    Surface(
+                        onClick = { showSeasonSheet = true },
+                        shape = RoundedCornerShape(12.dp),
+                        color = SurfaceElevated,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, SurfaceBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = currentSeason?.title ?: "Season 1",
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    text = "${detail.seasons.size} seasons available",
+                                    color = TextMuted,
+                                    fontSize = 11.sp
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Select Season",
+                                tint = CrunchyOrange,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    if (showSeasonSheet) {
+                        ModalBottomSheet(
+                            onDismissRequest = { showSeasonSheet = false },
+                            containerColor = SurfaceDark
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp, vertical = 16.dp)
+                            ) {
+                                Text(
+                                    text = "Select Season",
+                                    color = TextPrimary,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                detail.seasons.forEach { season ->
+                                    val isSelected = season.id == uiState.selectedSeasonId
+                                    Surface(
+                                        onClick = {
+                                            showSeasonSheet = false
+                                            if (!isSelected) {
+                                                viewModel.switchSeason(season.id)
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = if (isSelected) CrunchyOrange.copy(alpha = 0.15f) else SurfaceElevated,
+                                        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, CrunchyOrange) else null,
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(14.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = season.title,
+                                                color = if (isSelected) CrunchyOrange else TextPrimary,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                fontSize = 15.sp,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            if (isSelected) {
+                                                Icon(
+                                                    imageVector = Icons.Default.CheckCircle,
+                                                    contentDescription = null,
+                                                    tint = CrunchyOrange,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(24.dp))
+                            }
+                        }
+                    }
                 }
 
                 // Episodes Section Header

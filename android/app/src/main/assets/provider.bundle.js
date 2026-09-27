@@ -238,7 +238,13 @@
         rating: p.score || p.rating || "N/A",
         year: p.year || "",
         genres: typeof p.genres === 'string' ? p.genres.split(',').map(s => s.trim()) : (Array.isArray(p.genres) ? p.genres : []),
-        type: p.type || "TV"
+        type: p.type || "TV",
+        seasons: (p.seasons || []).map((s, i) => ({
+            id: String(s.id || ''),
+            title: s.title || `Season ${s.season_number || i + 1}`,
+            seasonNumber: s.season_number || i + 1
+        })),
+        mal_id: p.mal_id || p.malId || 0
       };
       postCache.set(key, res);
       return res;

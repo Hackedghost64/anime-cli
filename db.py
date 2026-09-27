@@ -40,10 +40,16 @@ async def init_db():
                 anime_title TEXT DEFAULT '',
                 anime_poster TEXT DEFAULT '',
                 anime_type TEXT DEFAULT '',
-                status TEXT DEFAULT 'watching',
-                added_at INTEGER NOT NULL
+                status TEXT DEFAULT 'PLAN_TO_WATCH',
+                added_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL DEFAULT 0
             )
         """)
+        # Migration: add updated_at column if missing from older DBs
+        try:
+            await db.execute("ALTER TABLE watchlist ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+        except Exception:
+            pass  # column already exists
         await db.commit()
     _initialized = True
 
@@ -134,9 +140,9 @@ async def toggle_watchlist(
         else:
             now = int(time.time())
             await db.execute("""
-                INSERT INTO watchlist (anime_id, anime_title, anime_poster, anime_type, added_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, (str(anime_id), anime_title, anime_poster, anime_type, now))
+                INSERT INTO watchlist (anime_id, anime_title, anime_poster, anime_type, status, added_at, updated_at)
+                VALUES (?, ?, ?, ?, 'PLAN_TO_WATCH', ?, ?)
+            """, (str(anime_id), anime_title, anime_poster, anime_type, now, now))
             await db.commit()
             return True
 
@@ -223,3 +229,71 @@ async def merge_progress_deltas(deltas: List[Dict[str, Any]], client_timestamp: 
         await db.commit()
     return updated_count
 
+async def get_all_watchlist() -> List[Dict[str, Any]]:
+    """Return all watchlist records for P2P synchronization."""
+    async with get_db() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM watchlist ORDER BY updated_at DESC") as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+async def merge_watchlist_deltas(deltas: List[Dict[str, Any]], client_timestamp: int) -> int:
+    """Merge incoming watchlist deltas using relative-age conflict resolution."""
+    now = int(time.time())
+    updated_count = 0
+    async with get_db() as db:
+        db.row_factory = aiosqlite.Row
+        for d in deltas:
+            anime_id = str(d.get("anime_id", ""))
+            if not anime_id:
+                continue
+
+            status = str(d.get("status", "PLAN_TO_WATCH"))
+            client_updated_at = int(d.get("updated_at") or 0)
+            incoming_age = max(0, client_timestamp - client_updated_at)
+            normalized_updated_at = max(0, now - incoming_age)
+
+            # Handle deletion
+            if status == "REMOVED":
+                await db.execute("DELETE FROM watchlist WHERE anime_id=?", (anime_id,))
+                updated_count += 1
+                continue
+
+            async with db.execute(
+                "SELECT updated_at FROM watchlist WHERE anime_id=?",
+                (anime_id,)
+            ) as cursor:
+                existing = await cursor.fetchone()
+
+            should_update = False
+            if not existing:
+                should_update = True
+            else:
+                existing_age = max(0, now - int(existing["updated_at"] or 0))
+                if incoming_age < existing_age:
+                    should_update = True
+
+            if should_update:
+                added_at = int(d.get("added_at") or d.get("created_at") or now)
+                await db.execute("""
+                    INSERT INTO watchlist
+                    (anime_id, anime_title, anime_poster, anime_type, status, added_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(anime_id) DO UPDATE SET
+                        status=excluded.status,
+                        updated_at=excluded.updated_at,
+                        anime_title=CASE WHEN excluded.anime_title != '' THEN excluded.anime_title ELSE watchlist.anime_title END,
+                        anime_poster=CASE WHEN excluded.anime_poster != '' THEN excluded.anime_poster ELSE watchlist.anime_poster END,
+                        anime_type=CASE WHEN excluded.anime_type != '' THEN excluded.anime_type ELSE watchlist.anime_type END
+                """, (
+                    anime_id,
+                    d.get("anime_title") or d.get("title") or "",
+                    d.get("anime_poster") or d.get("poster") or "",
+                    d.get("anime_type") or "",
+                    status,
+                    added_at,
+                    normalized_updated_at
+                ))
+                updated_count += 1
+        await db.commit()
+    return updated_count

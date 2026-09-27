@@ -5,21 +5,20 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -28,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -57,11 +57,14 @@ import com.shinsei.anime.ui.theme.CrunchyOrange
 import com.shinsei.anime.ui.theme.ShinseiAnimeTheme
 import com.shinsei.anime.ui.theme.SurfaceDark
 import com.shinsei.anime.ui.theme.TextMuted
+import com.shinsei.anime.ui.watchlist.WatchlistScreen
+import com.shinsei.anime.ui.watchlist.WatchlistViewModel
 import com.shinsei.anime.ui.theme.TextPrimary
 
 enum class MainTab(val label: String, val icon: ImageVector) {
     HOME("Home", Icons.Default.Home),
     BROWSE("Browse", Icons.Default.Explore),
+    WATCHLIST("My List", Icons.Default.BookmarkBorder),
     DOWNLOADS("Downloads", Icons.Default.Download),
     SYNC("Sync", Icons.Default.Sync)
 }
@@ -70,6 +73,7 @@ class MainActivity : ComponentActivity() {
 
     private val homeViewModel: HomeViewModel by viewModels()
     private val detailViewModel: DetailViewModel by viewModels()
+    private val watchlistViewModel: WatchlistViewModel by viewModels()
 
     private val pendingDetailAnimeId = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
@@ -171,73 +175,65 @@ class MainActivity : ComponentActivity() {
     ) {
         var currentTab by rememberSaveable { mutableStateOf(MainTab.HOME) }
 
-        Scaffold(
-            bottomBar = {
-                NavigationBar(
-                    containerColor = SurfaceDark,
-                    tonalElevation = 8.dp
-                ) {
-                    MainTab.values().forEach { tab ->
-                        val isSelected = currentTab == tab
-                        NavigationBarItem(
-                            selected = isSelected,
-                            onClick = { currentTab = tab },
-                            icon = {
-                                Icon(
-                                    imageVector = tab.icon,
-                                    contentDescription = tab.label
-                                )
-                            },
-                            label = {
-                                Text(
-                                    text = tab.label,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    fontSize = 11.sp
-                                )
-                            },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = CrunchyOrange,
-                                selectedTextColor = CrunchyOrange,
-                                unselectedIconColor = TextMuted,
-                                unselectedTextColor = TextMuted,
-                                indicatorColor = CrunchyOrange.copy(alpha = 0.15f)
+        NavigationSuiteScaffold(
+            navigationSuiteItems = {
+                MainTab.values().forEach { tab ->
+                    val isSelected = currentTab == tab
+                    item(
+                        selected = isSelected,
+                        onClick = { currentTab = tab },
+                        icon = {
+                            Icon(
+                                imageVector = tab.icon,
+                                contentDescription = tab.label
                             )
-                        )
-                    }
+                        },
+                        label = {
+                            Text(
+                                text = tab.label,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 11.sp
+                            )
+                        }
+                    )
                 }
-            }
-        ) { paddingValues ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = paddingValues.calculateBottomPadding())
-            ) {
-                when (currentTab) {
-                    MainTab.HOME -> {
-                        HomeScreen(
-                            viewModel = homeViewModel,
-                            onNavigateToDetail = onNavigateToDetail,
-                            onPlayProgress = onPlayProgress,
-                            onOpenSyncSheet = onOpenSyncSheet
-                        )
-                    }
-                    MainTab.BROWSE -> {
-                        BrowseScreen(
-                            viewModel = homeViewModel,
-                            onNavigateToDetail = onNavigateToDetail
-                        )
-                    }
-                    MainTab.DOWNLOADS -> {
-                        DownloadsScreen(
-                            onPlayOffline = onPlayDownload,
-                            onNavigateToBrowse = { currentTab = MainTab.BROWSE }
-                        )
-                    }
-                    MainTab.SYNC -> {
-                        SyncScreen(
-                            onOpenQrScanner = onOpenSyncSheet
-                        )
-                    }
+            },
+            navigationSuiteColors = NavigationSuiteDefaults.colors(
+                navigationBarContainerColor = SurfaceDark,
+                navigationRailContainerColor = SurfaceDark
+            )
+        ) {
+            when (currentTab) {
+                MainTab.HOME -> {
+                    HomeScreen(
+                        viewModel = homeViewModel,
+                        onNavigateToDetail = onNavigateToDetail,
+                        onPlayProgress = onPlayProgress,
+                        onOpenSyncSheet = onOpenSyncSheet
+                    )
+                }
+                MainTab.BROWSE -> {
+                    BrowseScreen(
+                        viewModel = homeViewModel,
+                        onNavigateToDetail = onNavigateToDetail
+                    )
+                }
+                MainTab.WATCHLIST -> {
+                    WatchlistScreen(
+                        viewModel = watchlistViewModel,
+                        onNavigateToDetail = onNavigateToDetail
+                    )
+                }
+                MainTab.DOWNLOADS -> {
+                    DownloadsScreen(
+                        onPlayOffline = onPlayDownload,
+                        onNavigateToBrowse = { currentTab = MainTab.BROWSE }
+                    )
+                }
+                MainTab.SYNC -> {
+                    SyncScreen(
+                        onOpenQrScanner = onOpenSyncSheet
+                    )
                 }
             }
         }

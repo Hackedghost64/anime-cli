@@ -60,9 +60,28 @@ class SyncClient(private val context: Context) {
                 deltasJsonArray.put(obj)
             }
 
+            // Gather local watchlist
+            val watchlistDao = app.database.watchlistDao()
+            val localWatchlist = watchlistDao.getAll()
+            val watchlistJsonArray = JSONArray()
+
+            for (item in localWatchlist) {
+                val obj = JSONObject().apply {
+                    put("anime_id", item.animeId)
+                    put("anime_title", item.title)
+                    put("anime_poster", item.poster)
+                    put("anime_type", item.animeType)
+                    put("status", item.status)
+                    put("added_at", item.addedAt)
+                    put("updated_at", item.updatedAt)
+                }
+                watchlistJsonArray.put(obj)
+            }
+
             val requestBodyObj = JSONObject().apply {
                 put("client_timestamp", now)
                 put("progress_deltas", deltasJsonArray)
+                put("watchlist_deltas", watchlistJsonArray)
             }
 
             val mediaType = "application/json; charset=utf-8".toMediaType()
@@ -133,6 +152,47 @@ class SyncClient(private val context: Context) {
 
                 if (entitiesToUpsert.isNotEmpty()) {
                     dao.upsertAll(entitiesToUpsert)
+                }
+
+                // 2b. Merge incoming watchlist deltas
+                val incomingWatchlist = jsonResponse.optJSONArray("watchlist_deltas") ?: JSONArray()
+                val watchlistToUpsert = mutableListOf<com.shinsei.anime.data.local.WatchlistEntity>()
+
+                for (i in 0 until incomingWatchlist.length()) {
+                    val w = incomingWatchlist.getJSONObject(i)
+                    val wAnimeId = w.optString("anime_id", "")
+                    if (wAnimeId.isEmpty()) continue
+
+                    val wUpdatedAt = w.optLong("updated_at", 0L)
+                    val wAge = max(0L, serverTimestamp - wUpdatedAt)
+                    val wNormalized = max(0L, now - wAge)
+
+                    val existingW = watchlistDao.get(wAnimeId)
+                    val wShouldUpdate = if (existingW == null) true
+                        else max(0L, now - existingW.updatedAt) > wAge
+
+                    if (wShouldUpdate) {
+                        val status = w.optString("status", "PLAN_TO_WATCH")
+                        if (status == "REMOVED") {
+                            watchlistDao.delete(wAnimeId)
+                        } else {
+                            watchlistToUpsert.add(
+                                com.shinsei.anime.data.local.WatchlistEntity(
+                                    animeId = wAnimeId,
+                                    title = w.optString("anime_title", existingW?.title ?: ""),
+                                    poster = w.optString("anime_poster", existingW?.poster ?: ""),
+                                    animeType = w.optString("anime_type", existingW?.animeType ?: ""),
+                                    status = status,
+                                    addedAt = w.optLong("added_at", existingW?.addedAt ?: now),
+                                    updatedAt = wNormalized
+                                )
+                            )
+                        }
+                    }
+                }
+
+                if (watchlistToUpsert.isNotEmpty()) {
+                    watchlistDao.upsertAll(watchlistToUpsert)
                 }
 
                 // 3. Hot-reload script if server delivered updated provider bundle

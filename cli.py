@@ -400,9 +400,16 @@ def create_sync_app(token: str, sync_done_event: Optional[threading.Event] = Non
         merged_count = await db.merge_progress_deltas(phone_deltas, client_timestamp=client_ts)
         sync_stats["received"] = len(phone_deltas)
 
+        # Merge phone watchlist deltas
+        phone_watchlist = data.get("watchlist_deltas") or []
+        watchlist_merged = await db.merge_watchlist_deltas(phone_watchlist, client_timestamp=client_ts)
+
         # Get PC progress records
         pc_progress = await db.get_all_progress()
         sync_stats["sent"] = len(pc_progress)
+
+        # Get PC watchlist records
+        pc_watchlist = await db.get_all_watchlist()
 
         # Check for provider bundle script update
         latest_script = None
@@ -429,6 +436,7 @@ def create_sync_app(token: str, sync_done_event: Optional[threading.Event] = Non
             "merged": merged_count,
             "server_timestamp": int(time.time()),
             "progress_deltas": pc_progress,
+            "watchlist_deltas": pc_watchlist,
             "latest_script": latest_script
         }
 
