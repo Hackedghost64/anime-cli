@@ -380,11 +380,8 @@ fun DetailScreen(
 
                             data class StatusOption(val emoji: String, val status: String, val label: String)
                             val options = listOf(
-                                StatusOption("📺", com.shinsei.anime.data.local.WatchlistEntity.STATUS_WATCHING, "Watching"),
                                 StatusOption("📋", com.shinsei.anime.data.local.WatchlistEntity.STATUS_PLAN_TO_WATCH, "Plan to Watch"),
-                                StatusOption("✅", com.shinsei.anime.data.local.WatchlistEntity.STATUS_COMPLETED, "Completed"),
-                                StatusOption("⏸\uFE0F", com.shinsei.anime.data.local.WatchlistEntity.STATUS_ON_HOLD, "On Hold"),
-                                StatusOption("❌", com.shinsei.anime.data.local.WatchlistEntity.STATUS_DROPPED, "Dropped")
+                                StatusOption("⏸\uFE0F", com.shinsei.anime.data.local.WatchlistEntity.STATUS_ON_HOLD, "On Hold")
                             )
 
                             options.forEach { opt ->

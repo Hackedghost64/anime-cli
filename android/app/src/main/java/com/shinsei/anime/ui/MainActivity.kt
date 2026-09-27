@@ -12,6 +12,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Explore
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Icon
@@ -19,6 +21,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -175,7 +178,13 @@ class MainActivity : ComponentActivity() {
     ) {
         var currentTab by rememberSaveable { mutableStateOf(MainTab.HOME) }
 
+        val configuration = LocalConfiguration.current
+        val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val isWideScreen = configuration.screenWidthDp >= 600
+        val navType = if (isLandscape || isWideScreen) NavigationSuiteType.NavigationRail else NavigationSuiteType.NavigationBar
+
         NavigationSuiteScaffold(
+            layoutType = navType,
             navigationSuiteItems = {
                 MainTab.values().forEach { tab ->
                     val isSelected = currentTab == tab

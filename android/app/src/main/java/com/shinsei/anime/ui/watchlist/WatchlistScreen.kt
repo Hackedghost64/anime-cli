@@ -40,11 +40,8 @@ fun WatchlistScreen(
     
     val filters = listOf(
         null to "All",
-        WatchlistEntity.STATUS_WATCHING to "Watching",
         WatchlistEntity.STATUS_PLAN_TO_WATCH to "Plan to Watch",
-        WatchlistEntity.STATUS_COMPLETED to "Completed",
-        WatchlistEntity.STATUS_ON_HOLD to "On Hold",
-        WatchlistEntity.STATUS_DROPPED to "Dropped"
+        WatchlistEntity.STATUS_ON_HOLD to "On Hold"
     )
 
     Column(modifier = Modifier.fillMaxSize().background(BackgroundBlack)) {
@@ -190,11 +187,8 @@ fun WatchlistScreen(
 
                 data class StatusOption(val emoji: String, val status: String, val label: String)
                 val options = listOf(
-                    StatusOption("📺", WatchlistEntity.STATUS_WATCHING, "Watching"),
                     StatusOption("📋", WatchlistEntity.STATUS_PLAN_TO_WATCH, "Plan to Watch"),
-                    StatusOption("✅", WatchlistEntity.STATUS_COMPLETED, "Completed"),
-                    StatusOption("⏸\uFE0F", WatchlistEntity.STATUS_ON_HOLD, "On Hold"),
-                    StatusOption("❌", WatchlistEntity.STATUS_DROPPED, "Dropped")
+                    StatusOption("⏸\uFE0F", WatchlistEntity.STATUS_ON_HOLD, "On Hold")
                 )
 
                 options.forEach { opt ->
