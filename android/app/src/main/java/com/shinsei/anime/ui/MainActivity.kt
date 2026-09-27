@@ -65,7 +65,7 @@ enum class MainTab(val label: String, val icon: ImageVector) {
     HOME("Home", Icons.Default.Home),
     BROWSE("Browse", Icons.Default.Explore),
     WATCHLIST("My List", Icons.Default.BookmarkBorder),
-    DOWNLOADS("Downloads", Icons.Default.Download),
+    DOWNLOADS("Offline", Icons.Default.Download),
     SYNC("Sync", Icons.Default.Sync)
 }
 
@@ -192,7 +192,9 @@ class MainActivity : ComponentActivity() {
                             Text(
                                 text = tab.label,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 11.sp
+                                fontSize = 10.5.sp,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     )
