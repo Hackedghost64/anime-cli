@@ -67,9 +67,18 @@ fi
 cd "$INSTALL_DIR"
 
 echo -e "\n${CYAN}[4/5] Installing Python packages...${NC}"
-pip install --upgrade pip --quiet
-# Install pure-python dependencies so no C-compilation is needed on Android
-pip install httpx fastapi "uvicorn[standard]" aiosqlite pydantic qrcode --quiet
+# Note: In Termux, pip is managed by pkg; upgrading pip via pip is strictly forbidden by Termux.
+PIP_FLAGS=""
+if python -m pip install --help 2>&1 | grep -q -- "--break-system-packages"; then
+    PIP_FLAGS="--break-system-packages"
+fi
+
+# 1. Install core browsing and playback packages (100% pure Python, no compilation needed)
+echo -e "${GREEN}Installing anime streaming engine dependencies...${NC}"
+python -m pip install $PIP_FLAGS httpx aiosqlite --quiet
+
+# 2. Attempt installing optional sync server packages (won't abort if optional packages fail)
+python -m pip install $PIP_FLAGS fastapi "uvicorn[standard]" pydantic qrcode --quiet || true
 
 echo -e "\n${CYAN}[5/5] Creating executable shortcuts...${NC}"
 WRAPPER_PATH="$PREFIX/bin/anime-cli"

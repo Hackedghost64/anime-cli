@@ -26,8 +26,15 @@ from anilab.client import AnilabClient
 from anilab.kyoto import KyotoResolver
 import aniskip
 import db
-from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+try:
+    from fastapi import FastAPI, Header, HTTPException, Request
+    from fastapi.responses import PlainTextResponse
+except ImportError:
+    FastAPI = None
+    Header = None
+    HTTPException = None
+    Request = None
+    PlainTextResponse = None
 
 # Terminal Colors
 C_RESET = "\033[0m"
@@ -382,7 +389,9 @@ def cmd_browser(port: int = 8000, share: bool = False, open_browser: bool = True
         if inhibitor:
             inhibitor.stop()
 
-def create_sync_app(token: str, sync_done_event: Optional[threading.Event] = None, sync_stats: Optional[dict] = None) -> FastAPI:
+def create_sync_app(token: str, sync_done_event: Optional[threading.Event] = None, sync_stats: Optional[dict] = None) -> Any:
+    if FastAPI is None:
+        raise RuntimeError("FastAPI is required for the P2P sync server. Install it with: pip install fastapi uvicorn")
     sync_app = FastAPI()
     if sync_stats is None:
         sync_stats = {"received": 0, "sent": 0}

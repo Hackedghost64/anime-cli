@@ -3,9 +3,12 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 import httpx
-from fastapi import APIRouter, Query
 
-router = APIRouter(prefix="/skip", tags=["skip"])
+try:
+    from fastapi import APIRouter
+    router = APIRouter(prefix="/skip", tags=["skip"])
+except ImportError:
+    router = None
 
 _client: Optional[httpx.AsyncClient] = None
 _mal_id_cache: Dict[str, Optional[int]] = {}
@@ -82,11 +85,10 @@ async def lookup_mal_id(title: str) -> Optional[int]:
     _mal_id_cache[clean_title] = None
     return None
 
-@router.get("/times")
 async def get_skip_times(
-    title: str = Query(...), 
-    episode: int = Query(...),
-    duration: float = Query(0.0)
+    title: str, 
+    episode: int,
+    duration: float = 0.0
 ) -> Dict[str, Any]:
     """Fetch skip intervals (OP / ED) for a given anime title and episode number."""
     mal_id = await lookup_mal_id(title)
@@ -118,3 +120,6 @@ async def get_skip_times(
         pass
 
     return {"found": False, "results": [], "mal_id": mal_id}
+
+if router is not None:
+    router.add_api_route("/times", get_skip_times, methods=["GET"])
