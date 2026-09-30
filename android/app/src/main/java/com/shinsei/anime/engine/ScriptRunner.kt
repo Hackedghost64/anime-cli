@@ -34,6 +34,9 @@ import java.util.concurrent.TimeUnit
 class ScriptRunner(private val context: Context) {
 
     private val tag = "ScriptRunner"
+    private val prefs by lazy {
+        context.getSharedPreferences("shinsei_provider_prefs", Context.MODE_PRIVATE)
+    }
     private var webView: WebView? = null
     private val pendingRequests = ConcurrentHashMap<String, CompletableDeferred<String>>()
     private var initDeferred = CompletableDeferred<Boolean>()
@@ -102,9 +105,6 @@ class ScriptRunner(private val context: Context) {
 
             val resp = okHttpClient.newCall(reqBuilder.build()).execute()
             return resp.use { response ->
-                if (!response.isSuccessful && response.code >= 400) {
-                    throw RuntimeException("HTTP ${response.code} on $url")
-                }
                 response.body?.string() ?: ""
             }
         }
@@ -209,10 +209,6 @@ class ScriptRunner(private val context: Context) {
     companion object {
         const val GITHUB_SCRIPT_URL =
             "https://raw.githubusercontent.com/Hackedghost64/anime-cli/main/android/app/src/main/assets/provider.bundle.js"
-    }
-
-    private val prefs by lazy {
-        context.getSharedPreferences("shinsei_provider_prefs", Context.MODE_PRIVATE)
     }
 
     private fun loadScript(): String {

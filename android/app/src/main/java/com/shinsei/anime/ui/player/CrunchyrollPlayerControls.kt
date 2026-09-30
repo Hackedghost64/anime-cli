@@ -104,9 +104,9 @@ fun CrunchyrollPlayerControls(
     val duration = playerState.duration.coerceAtLeast(1L)
 
     val showSkipIntro = skipIntroRange != null &&
-            curPos >= skipIntroRange.first && curPos <= skipIntroRange.second
+            curPos >= (skipIntroRange.first - 5000L).coerceAtLeast(0L) && curPos <= skipIntroRange.second
     val showSkipOutro = skipOutroRange != null &&
-            curPos >= skipOutroRange.first && curPos <= skipOutroRange.second
+            curPos >= (skipOutroRange.first - 5000L).coerceAtLeast(0L) && curPos <= skipOutroRange.second
 
     Box(
         modifier = modifier.fillMaxSize()

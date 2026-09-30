@@ -6,7 +6,7 @@
 (function(exports) {
   'use strict';
 
-  exports.version = "1.5.0";
+  exports.version = "1.5.1";
 
   const ANILAB_BASE = "https://anilab2.amdapi.click/api";
   const KYOTO_BASE = "https://app.kyotoplayer.com/api/v4";
@@ -385,6 +385,8 @@
       } else {
         const cleanTitle = String(titleOrMalId)
           .replace(/\s*\(?(TV|Dub|Sub|Season\s*\d+|Part\s*\d+|Cour\s*\d+)\)?/gi, '')
+          .replace(/[:\-_]/g, ' ')
+          .replace(/\s+/g, ' ')
           .trim();
         const searchTitles = [cleanTitle, String(titleOrMalId).trim()].filter((v, i, a) => v && a.indexOf(v) === i);
 
@@ -399,9 +401,21 @@
               })
             });
             const m = alRes?.data?.Media;
-            if (m?.id && !idsToCheck.includes(m.id)) idsToCheck.push(m.id);
+            // IMPORTANT: AniSkip expects MyAnimeList ID (idMal)!
             if (m?.idMal && !idsToCheck.includes(m.idMal)) idsToCheck.push(m.idMal);
+            if (m?.id && !idsToCheck.includes(m.id)) idsToCheck.push(m.id);
             if (idsToCheck.length > 0) break;
+          } catch {}
+        }
+
+        // Secondary fallback: Jikan API
+        if (idsToCheck.length === 0) {
+          try {
+            const jikanRes = await requestJson(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(cleanTitle)}&limit=1`);
+            const jPost = jikanRes?.data?.[0];
+            if (jPost?.mal_id && !idsToCheck.includes(jPost.mal_id)) {
+              idsToCheck.push(jPost.mal_id);
+            }
           } catch {}
         }
       }
