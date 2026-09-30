@@ -592,7 +592,8 @@ async def cmd_terminal(
     dub_pref: Optional[bool] = None, 
     continue_last: bool = False, 
     download: bool = False,
-    ep_num: Optional[int] = None
+    ep_num: Optional[int] = None,
+    player_override: Optional[str] = None
 ):
     anilab = AnilabClient()
     kyoto = KyotoResolver()
@@ -899,132 +900,34 @@ async def cmd_terminal(
             except Exception:
                 skip_data = {}
 
-        # Prepare MPV integration Lua script (AniSkip + Precise Playback Position Tracker)
-        progress_file = f"/tmp/mpv_progress_{os.getpid()}_{anime_id}_{ep_id}.txt"
-        lua_script_path = f"/tmp/anime_mpv_{os.getpid()}_{anime_id}_{ep_id}.lua"
+        # Launch player (multi-platform: Termux Android, Windows, Linux, macOS)
+        import player
+        final_pos, final_dur = player.play_stream(
+            stream_url=stream_url,
+            anime_title=anime_title,
+            ep_num=ep_num,
+            anime_id=anime_id,
+            ep_id=ep_id,
+            resume_position=resume_position,
+            skip_data=skip_data,
+            player_override=player_override
+        )
 
-        lua_code = [
-            f'local progress_file = "{progress_file}"',
-            'local last_pos = 0',
-            'local last_dur = 0',
-            'mp.observe_property("time-pos", "number", function(name, val)',
-            '    if val then last_pos = val end',
-            'end)',
-            'mp.observe_property("duration", "number", function(name, val)',
-            '    if val then last_dur = val end',
-            'end)',
-            'local function save_pos()',
-            '    local pos = mp.get_property_number("time-pos") or last_pos',
-            '    local dur = mp.get_property_number("duration") or last_dur',
-            '    if pos and pos > 0 then',
-            '        local f = io.open(progress_file, "w")',
-            '        if f then',
-            '            f:write(string.format("%.2f %.2f", pos, dur or 0))',
-            '            f:close()',
-            '        end',
-            '    end',
-            'end',
-            'mp.add_periodic_timer(2, save_pos)',
-            'mp.observe_property("pause", "bool", function(name, val) if val then save_pos() end end)',
-            'mp.register_event("shutdown", save_pos)'
-        ]
-
-        if skip_data.get("found") and skip_data.get("results"):
-            op = next((r for r in skip_data["results"] if r.get("type") == "op"), None)
-            ed = next((r for r in skip_data["results"] if r.get("type") == "ed"), None)
-            if op:
-                lua_code.extend([
-                    f"local op_start = {op['start']}",
-                    f"local op_end = {op['end']}",
-                    "local has_skipped_op = false",
-                    'mp.observe_property("time-pos", "number", function(name, val)',
-                    '    if val and val >= op_start and val < op_end and not has_skipped_op then',
-                    '        has_skipped_op = true',
-                    '        mp.set_property_number("time-pos", op_end + 0.5)',
-                    '        mp.osd_message("⚡ Skipped Opening Theme", 3)',
-                    '    end',
-                    'end)'
-                ])
-                print(f"{C_GOLD}⚡ AniSkip: Auto-skip Opening armed ({int(op['start'])}s -> {int(op['end'])}s){C_RESET}")
-            if ed:
-                lua_code.extend([
-                    f"local ed_start = {ed['start']}",
-                    f"local ed_end = {ed['end']}",
-                    "local has_skipped_ed = false",
-                    'mp.observe_property("time-pos", "number", function(name, val)',
-                    '    if val and val >= ed_start and val < ed_end and not has_skipped_ed then',
-                    '        has_skipped_ed = true',
-                    '        mp.set_property_number("time-pos", ed_end + 0.5)',
-                    '        mp.osd_message("⚡ Skipped Ending Theme", 3)',
-                    '    end',
-                    'end)'
-                ])
-                print(f"{C_GOLD}⚡ AniSkip: Auto-skip Ending armed ({int(ed['start'])}s -> {int(ed['end'])}s){C_RESET}")
-
-        with open(lua_script_path, "w") as f:
-            f.write("\n".join(lua_code))
-
-        # Launch MPV
-        mpv_bin = shutil.which("mpv")
-        if not mpv_bin:
-            print(f"\n{C_RED}mpv is not installed. Stream URL:{C_RESET}\n{stream_url}")
-            return
-
-        mpv_cmd = [
-            mpv_bin,
-            f"--title={anime_title} - Episode {ep_num}",
-            "--hwdec=auto",
-            "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "--referrer=https://play.app/",
-            f"--script={lua_script_path}",
-            stream_url
-        ]
-
-        if resume_position > 10:
-            mpv_cmd.insert(len(mpv_cmd) - 1, f"--start={int(resume_position)}")
-
-        print(f"\n{C_GREEN}{C_BOLD}▶ Playing in MPV... (Press 'q' to quit, Space to pause, arrows to seek){C_RESET}")
-        try:
-            subprocess.run(mpv_cmd)
-        finally:
-            # Read exact time-pos and duration captured by Lua hook
-            final_pos = 0.0
-            final_dur = 0.0
-            if os.path.exists(progress_file):
-                try:
-                    with open(progress_file, "r") as f:
-                        parts = f.read().strip().split()
-                        if len(parts) >= 2:
-                            final_pos = float(parts[0])
-                            final_dur = float(parts[1])
-                except Exception:
-                    pass
-                try:
-                    os.remove(progress_file)
-                except Exception:
-                    pass
-
-            if os.path.exists(lua_script_path):
-                try:
-                    os.remove(lua_script_path)
-                except Exception:
-                    pass
-
-            # Save actual watch progress to SQLite
-            if final_pos > 5 and final_dur > 0:
-                await db.save_progress(
-                    anime_id=anime_id,
-                    ep_id=ep_id,
-                    position=final_pos,
-                    duration=final_dur,
-                    anime_title=anime_title,
-                    anime_poster=anime_poster,
-                    ep_num=ep_num,
-                    ep_name=ep_name
-                )
-                mins = int(final_pos // 60)
-                secs = int(final_pos % 60)
-                print(f"\n{C_GREEN}✓ Saved watch progress: Episode {ep_num} at {mins:02d}:{secs:02d}{C_RESET}")
+        # Save actual watch progress to SQLite
+        if final_pos > 5 and final_dur > 0:
+            await db.save_progress(
+                anime_id=anime_id,
+                ep_id=ep_id,
+                position=final_pos,
+                duration=final_dur,
+                anime_title=anime_title,
+                anime_poster=anime_poster,
+                ep_num=ep_num,
+                ep_name=ep_name
+            )
+            mins = int(final_pos // 60)
+            secs = int(final_pos % 60)
+            print(f"\n{C_GREEN}✓ Saved watch progress: Episode {ep_num} at {mins:02d}:{secs:02d}{C_RESET}")
 
         # Auto-play next episode check
         is_completed = (final_dur > 0 and (final_pos / final_dur) >= 0.90) or (final_pos >= 1200 and (final_dur - final_pos) <= 60)
@@ -1069,6 +972,8 @@ def show_help():
     row("anime-cli -B, --binge", "Launch Binge Roulette mood selector")
     row("anime-cli --today, --schedule", "View today's live anime release radar")
     row("anime-cli -o, --download [title]", "Batch download 1080p MP4 via FFmpeg")
+    row("anime-cli --config-player", "Select preferred player (MPV, VLC, Termux, etc.)")
+    row("anime-cli --player <name>", "Override player (mpv, vlc, mpv-android, etc.)")
     row("anime-cli -d, --dub", "Prefer English Dub audio servers")
     row("anime-cli --sub", "Prefer Japanese Sub audio servers")
     row("anime-cli help, -h", "Display this interactive help manual")
@@ -1111,6 +1016,7 @@ async def interactive_menu():
             "📅 Today's Airing Radar (Live Release Schedule)",
             "▶ Continue Watching (Resume last episode)",
             "📥 Download Episode (1080p MP4 via FFmpeg)",
+            "🎬 Configure Video Player (--config-player)",
             "❓ Help & Shortcuts Guide",
             "❌ Exit"
         ]
@@ -1144,6 +1050,13 @@ async def interactive_menu():
             await cmd_terminal(download=True)
             break
         elif sel == 7:
+            import player
+            player.choose_player_interactive()
+            try:
+                input(f"\n{C_ORANGE}Press Enter to return to menu...{C_RESET}")
+            except (KeyboardInterrupt, EOFError):
+                break
+        elif sel == 8:
             show_help()
             try:
                 input(f"\n{C_ORANGE}Press Enter to return to menu...{C_RESET}")
@@ -1184,6 +1097,8 @@ def main():
     parser.add_argument("-d", "--dub", action="store_true", help="Prefer English Dub audio")
     parser.add_argument("--sub", action="store_true", help="Prefer Japanese Sub audio")
     parser.add_argument("-o", "--download", action="store_true", help="Download episode in 1080p MP4 via FFmpeg")
+    parser.add_argument("--player", type=str, default=None, help="Preferred player override (mpv, vlc, mpv-android, just-player, etc.)")
+    parser.add_argument("--config-player", dest="config_player", action="store_true", help="Interactively choose preferred video player")
     parser.add_argument("-p", "--port", type=int, default=8088, help="Server port (default: 8088)")
     parser.add_argument("--server", action="store_true", help="Run headless background streaming server")
     parser.add_argument("--no-sleep", "--keep-awake", dest="keep_awake", action="store_true", default=True, help="Prevent PC from sleeping or suspending while server is running (default: enabled)")
@@ -1217,7 +1132,10 @@ def main():
         return
 
     # Dispatch based on simple flags
-    if args.init or (args.query in ("init", "initialize")):
+    if args.config_player or (args.query in ("player", "config-player", "--config-player")):
+        import player
+        player.choose_player_interactive()
+    elif args.init or (args.query in ("init", "initialize")):
         cmd_init(port=args.port)
     elif args.sync or (args.query in ("sync", "-s")):
         cmd_sync(port=args.port)
@@ -1230,7 +1148,7 @@ def main():
         async def _run_binge():
             title = await run_binge_match(dub_pref=dub_pref)
             if title:
-                await cmd_terminal(query=title, dub_pref=dub_pref, download=args.download, ep_num=1)
+                await cmd_terminal(query=title, dub_pref=dub_pref, download=args.download, ep_num=1, player_override=args.player)
         asyncio.run(_run_binge())
     elif args.today or (args.query in ("today", "schedule")):
         from anilab.schedule import run_schedule_radar
@@ -1238,14 +1156,14 @@ def main():
             res = await run_schedule_radar(dub_pref=dub_pref)
             if res:
                 title, ep = res
-                await cmd_terminal(query=title, dub_pref=dub_pref, download=args.download, ep_num=ep)
+                await cmd_terminal(query=title, dub_pref=dub_pref, download=args.download, ep_num=ep, player_override=args.player)
         asyncio.run(_run_today())
     elif args.continue_last:
-        asyncio.run(cmd_terminal(continue_last=True, dub_pref=dub_pref, download=args.download))
+        asyncio.run(cmd_terminal(continue_last=True, dub_pref=dub_pref, download=args.download, player_override=args.player))
     elif args.download and not args.query:
-        asyncio.run(cmd_terminal(download=True, dub_pref=dub_pref))
+        asyncio.run(cmd_terminal(download=True, dub_pref=dub_pref, player_override=args.player))
     elif args.query:
-        asyncio.run(cmd_terminal(query=args.query, dub_pref=dub_pref, download=args.download))
+        asyncio.run(cmd_terminal(query=args.query, dub_pref=dub_pref, download=args.download, player_override=args.player))
     else:
         # No arguments: launch interactive menu
         asyncio.run(interactive_menu())

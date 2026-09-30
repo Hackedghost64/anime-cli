@@ -24,15 +24,26 @@ So I reverse-engineered the actual mobile backend behind Android streaming apps 
 
 ---
 
-## ⚡ Install with 1 Command
+## ⚡ 1-Click Install
 
-Just run this in your terminal and you're good to go:
-
+### 🐧 Linux & macOS
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Hackedghost64/anime-cli/main/install.sh | bash
 ```
 
-> The installer automatically checks and helps install system dependencies (`mpv`, `fzf`, `ffmpeg`) and puts `anime-cli` right in your path.
+### 📱 Android (Termux)
+Run this single command inside the Termux app:
+```bash
+curl -sSL https://raw.githubusercontent.com/Hackedghost64/anime-cli/main/install-termux.sh | bash
+```
+> Installs Python, Git, and FFmpeg, configures your preferred Android video player (MPV Android, VLC Android, Just Player, MX Player, or system chooser), and creates instant `anime` and `anime-cli` commands.
+
+### 🪟 Windows (PowerShell)
+Open PowerShell and run:
+```powershell
+irm https://raw.githubusercontent.com/Hackedghost64/anime-cli/main/install-windows.ps1 | iex
+```
+> Checks Python, installs dependencies, sets up MPV or VLC, configures user PATH, and creates `anime` and `anime-cli` terminal commands.
 
 <details>
 <summary><b>Alternative Install Options (Pip / Git Clone)</b></summary>
@@ -54,7 +65,40 @@ pip install --user -e .
 - **Arch / Manjaro:** `sudo pacman -S mpv fzf ffmpeg python-pip`
 - **Fedora:** `sudo dnf install -y mpv fzf ffmpeg python3-pip`
 - **macOS:** `brew install mpv fzf ffmpeg python`
+- **Termux:** `pkg install -y python git ffmpeg termux-tools`
 </details>
+
+---
+
+## 🎬 Multi-Platform Player Selection
+
+Choose your preferred player anytime:
+```bash
+anime-cli --config-player
+# Or launch with a one-time override:
+anime-cli "attack on titan" --player vlc
+```
+
+| Platform | Supported Players | Notes |
+| :--- | :--- | :--- |
+| **Android (Termux)** | `mpv-android` (Recommended), `vlc-android`, `just-player`, `mx-player`, `termux-open`, `mpv` | Seamlessly dispatches hardware-accelerated streams via Android intents with custom titles and headers |
+| **Windows** | `mpv` (Recommended), `vlc`, `potplayer`, `mpc-hc`, `system` | Includes automated AniSkip opening/ending skip and resume tracking |
+| **Linux / macOS** | `mpv` (Recommended), `vlc`, `iina` (macOS) | Fast hardware-accelerated playback with AniSkip Lua integration |
+
+---
+
+## 📱 Shinsei Anime Android App (100% Standalone)
+
+> **Important:** The Shinsei Anime Android app is **completely standalone** and does **NOT** require a PC to browse, search, or stream anime!  
+> You can download or build the APK and run it anywhere on Wi-Fi or mobile data without running any background PC server.  
+> The PC sync feature (`anime-cli -s`) is an optional bonus for syncing your watch history and watchlist between your computer and phone over your local network.
+
+To build and install the APK on your Android device:
+```bash
+anime-cli --build-apk            # Builds debug APK
+anime-cli --build-apk --release  # Builds optimized R8 release APK (~13MB)
+anime-cli --build-apk --install  # Automatically installs onto phone via ADB
+```
 
 ---
 

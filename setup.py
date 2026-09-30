@@ -20,17 +20,20 @@ setup(
         "db",
         "proxy",
         "aniskip",
+        "player",
         "user_routes",
     ],
     install_requires=[
         "fastapi>=0.110.0",
         "uvicorn[standard]>=0.28.0",
-        "curl_cffi>=0.7.0",
         "httpx>=0.27.0",
         "aiosqlite>=0.20.0",
         "pydantic>=2.6.0",
         "qrcode>=8.0",
-    ],
+    ] + (["curl_cffi>=0.7.0"] if not (os.environ.get("TERMUX_VERSION") or "com.termux" in os.environ.get("PREFIX", "")) else []),
+    extras_require={
+        "cloudflare": ["curl_cffi>=0.7.0"],
+    },
     entry_points={
         "console_scripts": [
             "anime-cli=cli:main",

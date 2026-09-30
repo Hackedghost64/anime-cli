@@ -6,7 +6,7 @@
 (function(exports) {
   'use strict';
 
-  exports.version = "1.4.0";
+  exports.version = "1.5.0";
 
   const ANILAB_BASE = "https://anilab2.amdapi.click/api";
   const KYOTO_BASE = "https://app.kyotoplayer.com/api/v4";
@@ -49,6 +49,7 @@
 
   /**
    * 1. Home Feed Spotlight and Curated Rails
+   * Optimized for instant <1s load time without blocking network hydration loops.
    */
   exports.getHomeFeed = async function() {
     try {
@@ -56,7 +57,7 @@
       const spotlight = [];
       const rails = [];
 
-      // 1. Featured Spotlight Banner (Top item)
+      // 1. Featured Spotlight Banner (Top item from Anilab API, already fully populated)
       if (data.featured && (data.featured.id || data.featured.title)) {
         const feat = data.featured;
         postCache.set(String(feat.id), feat);
@@ -75,48 +76,39 @@
       // 2. Sections (Spotlight, Trending, Most Popular, Top Airing, etc.)
       const sections = Array.isArray(data.sections) ? data.sections : [];
 
-      // Find the official Spotlight section (up to 15 items for the hero carousel)
+      // Find the official Spotlight section (up to 10 items for the hero carousel)
       const spotlightSec = sections.find(s => s.name && s.name.toLowerCase() === 'spotlight');
-      const spotlightPosts = (spotlightSec && Array.isArray(spotlightSec.posts)) ? spotlightSec.posts.slice(0, 15) : [];
+      const spotlightPosts = (spotlightSec && Array.isArray(spotlightSec.posts)) ? spotlightSec.posts.slice(0, 10) : [];
 
-      // Collect IDs to hydrate in parallel
-      const idsToHydrate = [];
-      for (const p of spotlightPosts) {
-        const pid = String(p.id);
-        if (pid && !postCache.has(pid) && !idsToHydrate.includes(pid)) {
-          idsToHydrate.push(pid);
-        }
+      // Fast, bounded hydration for at most 3 spotlight items (max 2 seconds timeout)
+      const spotlightToHydrate = spotlightPosts
+        .map(p => String(p.id))
+        .filter(pid => pid && !postCache.has(pid))
+        .slice(0, 3);
+
+      if (spotlightToHydrate.length > 0) {
+        try {
+          const hydrateTask = Promise.allSettled(spotlightToHydrate.map(async id => {
+            try {
+              const pData = await exports.getPost(id);
+              if (pData && pData.title) postCache.set(id, pData);
+            } catch {}
+          }));
+          await Promise.race([
+            hydrateTask,
+            new Promise(resolve => setTimeout(resolve, 2000))
+          ]);
+        } catch {}
       }
 
-      for (const sec of sections) {
-        for (const p of (sec.posts || []).slice(0, 8)) {
-          const pid = String(p.id);
-          if (pid && !postCache.has(pid) && !idsToHydrate.includes(pid)) {
-            idsToHydrate.push(pid);
-          }
-        }
-      }
-
-      // Parallel hydrate batch
-      if (idsToHydrate.length > 0) {
-        await Promise.allSettled(idsToHydrate.map(async id => {
-          try {
-            const pData = await exports.getPost(id);
-            if (pData && pData.title) {
-              postCache.set(id, pData);
-            }
-          } catch {}
-        }));
-      }
-
-      // Populate full spotlight carousel items from the Spotlight section
+      // Populate spotlight carousel items
       for (const p of spotlightPosts) {
         const pid = String(p.id);
         if (spotlight.some(s => s.id === pid)) continue;
         const cached = postCache.get(pid);
         spotlight.push({
           id: pid,
-          title: cached?.title || p.title || p.name || "Featured Anime",
+          title: cached?.title || p.title || p.name || "",
           poster: cached?.poster || p.poster || "",
           backdrop: cached?.backdrop || cached?.poster || p.poster || "",
           synopsis: cached?.synopsis || "",
@@ -126,11 +118,13 @@
         });
       }
 
+      // Rails: populate immediately from section posts (no blocking HTTP requests!)
       for (const sec of sections) {
         const posts = (sec.posts || []).map(p => {
-          const cached = postCache.get(String(p.id));
+          const pid = String(p.id);
+          const cached = postCache.get(pid);
           return {
-            id: String(p.id),
+            id: pid,
             title: cached?.title || p.title || p.name || "",
             poster: p.poster || cached?.poster || "",
             score: cached?.rating || p.score || "",
@@ -161,7 +155,7 @@
         });
       }
 
-      // Combined flat items list for consumers that expect flat items array
+      // Combined flat items list
       const items = [];
       const seenIds = new Set();
       for (const rail of rails) {
@@ -191,18 +185,26 @@
       const rawPosts = data.posts || (data.data && data.data.posts) || [];
       if (!rawPosts.length) return { results: [], hasMore: false };
 
-      // In Anilab API, search items only contain { id, poster }.
-      // Hydrate titles for top results in parallel.
-      const toHydrate = rawPosts.slice(0, 10);
-      const hydrated = await Promise.allSettled(
-        toHydrate.map(p => exports.getPost(p.id))
-      );
+      // In Anilab API, search items contain { id, poster }.
+      // Hydrate titles for top 5 results with a 2.5s maximum timeout guard.
+      const toHydrate = rawPosts.slice(0, 5);
+      try {
+        const hydTask = Promise.allSettled(
+          toHydrate.map(p => exports.getPost(p.id))
+        );
+        await Promise.race([
+          hydTask,
+          new Promise(resolve => setTimeout(resolve, 2500))
+        ]);
+      } catch {}
 
-      const results = rawPosts.map((p, idx) => {
-        if (idx < hydrated.length && hydrated[idx].status === 'fulfilled' && hydrated[idx].value?.title) {
+      const results = rawPosts.map((p) => {
+        const pid = String(p.id);
+        const cached = postCache.get(pid);
+        if (cached && cached.title) {
           return {
             ...formatAnimeItem(p),
-            ...hydrated[idx].value
+            ...cached
           };
         }
         return formatAnimeItem(p);

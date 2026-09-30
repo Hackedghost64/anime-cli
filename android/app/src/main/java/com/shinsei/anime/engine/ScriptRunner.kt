@@ -187,6 +187,9 @@ class ScriptRunner(private val context: Context) {
                         AndroidBridge.onError(requestId, err.message || String(err));
                     }
                 }
+                try {
+                    AndroidBridge.onReady();
+                } catch(e) {}
                 </script>
                 </head>
                 <body></body>
