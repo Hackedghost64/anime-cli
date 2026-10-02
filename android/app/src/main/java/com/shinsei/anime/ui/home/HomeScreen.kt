@@ -192,6 +192,32 @@ fun HomeScreen(
 
         if (uiState.isLoading && uiState.rails.isEmpty() && uiState.spotlight == null) {
             com.shinsei.anime.ui.common.HomeSkeletonScreen()
+        } else if (!uiState.isSearching && !uiState.error.isNullOrBlank() && uiState.rails.isEmpty() && uiState.spotlight == null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Couldn't load the catalog",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = uiState.error ?: "Please check your connection and try again.",
+                    color = TextSecondary,
+                    textAlign = TextAlign.Center
+                )
+                TextButton(onClick = { viewModel.loadHomeFeed() }) {
+                    Text("Retry", color = CrunchyOrange)
+                }
+            }
         } else if (uiState.isSearching) {
             if (uiState.isLoading) {
                 com.shinsei.anime.ui.common.BrowseSkeletonScreen()

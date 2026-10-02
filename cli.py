@@ -15,6 +15,7 @@ import webbrowser
 import subprocess
 import threading
 import asyncio
+import re
 from typing import Any, Dict, List, Optional
 
 # Ensure project root is in sys.path
@@ -43,6 +44,7 @@ C_DIM = "\033[2m"
 C_ORANGE = "\033[38;2;255;100;10m"
 C_ORANGE_BG = "\033[48;2;255;100;10;38;2;255;255;255m"
 C_GOLD = "\033[38;2;255;184;0m"
+C_YELLOW = "\033[38;2;255;222;0m"
 C_CYAN = "\033[38;2;0;210;255m"
 C_GREEN = "\033[38;2;0;210;106m"
 C_RED = "\033[38;2;255;51;75m"
@@ -55,7 +57,7 @@ def banner():
   ╚════██║ ██╔══██║██║██║╚██╗██║╚════██║██╔══╝  ██║    ██║     ██║     ██║
   ███████║ ██║  ██║██║██║ ╚████║███████║███████╗██║    ╚██████╗███████╗██║
   ╚══════╝ ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝╚═╝     ╚═════╝╚══════╝╚═╝{C_RESET}
-    {C_DIM}Direct API · 1080p Kyoto · AniSkip Auto-Skip · Sub & Dub · Zero-Config{C_RESET}
+    {C_DIM}Direct API · 1080p Kyoto · AniSkip Auto-Skip · Sub/Dub where available · Zero-Config{C_RESET}
 """)
 
 def get_local_ip() -> str:
@@ -839,8 +841,9 @@ async def cmd_terminal(
         # Kick off AniSkip query concurrently in parallel with server extraction
         aniskip_task = None
         if not download:
+            ep_number_match = re.search(r"\d+", ep_num)
             aniskip_task = asyncio.create_task(
-                aniskip.get_skip_times(anime_title, int(ep_num) if str(ep_num).isdigit() else 1, 1440.0)
+                aniskip.get_skip_times(anime_title, int(ep_number_match.group(0)) if ep_number_match else 1)
             )
 
         # Fetch Servers
@@ -850,9 +853,17 @@ async def cmd_terminal(
             print(f"{C_RED}No servers found for this episode.{C_RESET}")
             return
 
-        # Separate SUB and DUB
+        # Separate SUB and DUB, and group by language
         subs = [s for s in servers if s.get("lang") == "sub"]
         dubs = [s for s in servers if s.get("lang") == "dub"]
+
+        # Group servers by actual language code for multi-language support
+        from collections import OrderedDict
+        lang_groups = OrderedDict()
+        for s in servers:
+            lc = s.get("lang_code") or s.get("lang", "sub")
+            lang_groups.setdefault(lc, []).append(s)
+        has_multi_lang = len(lang_groups) > 2  # more than just jpn + eng
 
         selected_server = None
 
@@ -865,15 +876,41 @@ async def cmd_terminal(
                 print(f"{C_RED}English Dub unavailable for this episode. Falling back to Japanese Sub.{C_RESET}")
                 selected_server = subs[0] if subs else servers[0]
         elif active_dub_pref is False:
-            if subs:
-                selected_server = subs[0]
+            # When set to sub and there are multiple sub languages, prefer Japanese
+            jpn_subs = [s for s in subs if s.get("lang_code") == "jpn"]
+            if jpn_subs:
+                selected_server = jpn_subs[0]
                 print(f"{C_GOLD}Using Japanese Sub{C_RESET}")
+            elif subs:
+                s = subs[0]
+                print(f"{C_GOLD}Using {s.get('flag', '')} {s.get('language', 'Sub')}{C_RESET}")
+                selected_server = s
             else:
                 print(f"{C_RED}Japanese Sub unavailable for this episode. Falling back to English Dub.{C_RESET}")
                 selected_server = dubs[0] if dubs else servers[0]
         else:
-            # Prompt user if both are available
-            if subs and dubs:
+            # Interactive prompt
+            if has_multi_lang:
+                # Multi-language: show all distinct languages with flags
+                audio_opts = []
+                lang_keys = []
+                for lc, group in lang_groups.items():
+                    sample = group[0]
+                    flag = sample.get("flag", "")
+                    lang_name = sample.get("language", lc.upper())
+                    kind = "DUB" if sample.get("lang") == "dub" else "SUB"
+                    audio_opts.append(f"{flag} {lang_name} ({kind}) — {len(group)} server{'s' if len(group)>1 else ''}")
+                    lang_keys.append(lc)
+                choice = fzf_select(audio_opts, prompt="Choose Language > ")
+                chosen_lc = lang_keys[choice]
+                chosen_group = lang_groups[chosen_lc]
+                selected_server = chosen_group[0]
+                # Remember preference for auto-play
+                if chosen_group[0].get("lang") == "dub":
+                    active_dub_pref = True
+                else:
+                    active_dub_pref = False
+            elif subs and dubs:
                 audio_opts = [
                     f"🇯🇵 SUB - Japanese Audio with Subtitles ({len(subs)} server{'s' if len(subs)>1 else ''})",
                     f"🇺🇸 DUB - English Audio ({len(dubs)} server{'s' if len(dubs)>1 else ''})"
@@ -894,9 +931,31 @@ async def cmd_terminal(
                 selected_server = subs[0] if subs else servers[0]
                 active_dub_pref = False
 
-        print(f"{C_CYAN}Extracting 1080p HLS stream from {selected_server.get('name')}...{C_RESET}")
-        stream_res = await kyoto.resolve_stream(anime_id, selected_server.get("id"))
-        stream_url = stream_res.get("url")
+        selected_lang = selected_server.get("lang")
+        selected_lang_code = selected_server.get("lang_code", "")
+        # Prefer same-language fallback servers (e.g. other Korean servers, not Japanese)
+        stream_candidates = [selected_server] + [
+            server for server in servers
+            if server.get("lang_code") == selected_lang_code and server.get("id") != selected_server.get("id")
+        ]
+        # Also add same sub/dub type as a secondary fallback
+        stream_candidates += [
+            server for server in servers
+            if server.get("lang") == selected_lang and server.get("lang_code") != selected_lang_code and server.get("id") != selected_server.get("id")
+        ]
+        stream_res = None
+        selected_lang_name = selected_server.get("language", selected_lang or "audio")
+        for candidate in stream_candidates:
+            print(f"{C_CYAN}Extracting 1080p HLS stream from {candidate.get('name')}...{C_RESET}")
+            try:
+                resolved = await kyoto.resolve_stream(anime_id, candidate.get("id"))
+                if resolved.get("url"):
+                    selected_server = candidate
+                    stream_res = resolved
+                    break
+            except Exception as e:
+                print(f"{C_YELLOW}Server failed, trying another {selected_lang_name} server: {e}{C_RESET}")
+        stream_url = stream_res.get("url") if stream_res else None
         if not stream_url:
             print(f"{C_RED}Failed to resolve video stream.{C_RESET}")
             return

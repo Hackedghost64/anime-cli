@@ -1,5 +1,6 @@
-"""AniSkip API integration for auto-skipping anime intros (OP) and outros (ED)."""
+"""AniSkip API integration for looking up anime intros (OP) and outros (ED)."""
 from __future__ import annotations
+import asyncio
 import re
 from typing import Any, Dict, List, Optional
 import httpx
@@ -98,24 +99,47 @@ async def get_skip_times(
     client = get_http_client()
     try:
         url = f"https://api.aniskip.com/v2/skip-times/{mal_id}/{episode}"
+        # Zero tells AniSkip not to filter by duration when the exact runtime is unknown.
         params = [
             ("types[]", "op"),
             ("types[]", "ed"),
             ("episodeLength", str(int(duration)) if duration > 0 else "0")
         ]
-        r = await client.get(url, params=params, timeout=5.0)
-        if r.status_code == 200:
-            data = r.json()
-            if data.get("found"):
-                results = []
-                for res in data.get("results", []):
-                    interval = res.get("interval", {})
-                    results.append({
-                        "type": res.get("skipType"), # 'op' or 'ed'
-                        "start": float(interval.get("startTime", 0)),
-                        "end": float(interval.get("endTime", 0))
-                    })
-                return {"found": True, "results": results, "mal_id": mal_id}
+        for attempt in range(2):
+            try:
+                r = await client.get(url, params=params, timeout=5.0)
+                if r.status_code == 200:
+                    data = r.json()
+                    if data.get("found"):
+                        results = []
+                        op_dict = None
+                        ed_dict = None
+                        for res in data.get("results", []):
+                            interval = res.get("interval", {})
+                            skip_type = str(res.get("skipType", "")).lower()
+                            item = {
+                                "type": skip_type,  # 'op' or 'ed'
+                                "start": float(interval.get("startTime", 0)),
+                                "end": float(interval.get("endTime", 0))
+                            }
+                            results.append(item)
+                            if skip_type == "op" and not op_dict:
+                                op_dict = item
+                            elif skip_type == "ed" and not ed_dict:
+                                ed_dict = item
+                        return {
+                            "found": True,
+                            "results": results,
+                            "op": op_dict,
+                            "ed": ed_dict,
+                            "mal_id": mal_id
+                        }
+                    return {"found": False, "results": [], "mal_id": mal_id}
+                if attempt == 0:
+                    await asyncio.sleep(0.75)
+            except Exception:
+                if attempt == 0:
+                    await asyncio.sleep(0.75)
     except Exception:
         pass
 

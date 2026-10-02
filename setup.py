@@ -1,3 +1,4 @@
+import os
 from setuptools import setup, find_packages
 
 setup(
@@ -33,6 +34,7 @@ setup(
     ] + (["curl_cffi>=0.7.0"] if not (os.environ.get("TERMUX_VERSION") or "com.termux" in os.environ.get("PREFIX", "")) else []),
     extras_require={
         "cloudflare": ["curl_cffi>=0.7.0"],
+        "cf": ["curl_cffi>=0.7.0"],
     },
     entry_points={
         "console_scripts": [

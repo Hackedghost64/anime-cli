@@ -299,11 +299,15 @@
       };
       const data = await requestJson(srvUrl, { headers });
       const list = data.list || [];
-      return list.map(s => ({
-        id: String(s.id),
-        lang: s.lang === 'dub' ? 'dub' : 'sub',
-        name: s.name || `Server ${s.id}`
-      }));
+      return list.map(s => {
+        const language = String(s.lang || '').trim().toLowerCase();
+        const isDub = language.startsWith('dub') || ['en', 'eng', 'english'].includes(language);
+        return {
+          id: String(s.id),
+          lang: isDub ? 'dub' : 'sub',
+          name: s.name || `Server ${s.id}`
+        };
+      });
     } catch (err) {
       return [];
     }
@@ -357,22 +361,36 @@
     const ep = episodes.find(e => String(e.num) === String(epNum)) || episodes[0];
     const servers = await exports.getServers(animeId, ep.id);
 
-    let chosenServer = null;
-    if (dub) {
-      chosenServer = servers.find(s => s.lang === 'dub');
-    }
-    if (!chosenServer) {
-      chosenServer = servers.find(s => String(s.id) === String(serverId)) || servers[0];
-    }
-    if (!chosenServer) {
+    if (!servers.length) {
       throw new Error("No playback servers found for episode " + epNum);
     }
 
-    return await exports.resolveStream(animeId, chosenServer.id);
+    let candidates;
+    if (dub) {
+      candidates = servers.filter(s => s.lang === 'dub');
+      if (!candidates.length) {
+        throw new Error("No dub servers available for episode " + epNum);
+      }
+    } else {
+      const preferred = servers.find(s => String(s.id) === String(serverId) && s.lang !== 'dub');
+      candidates = [preferred, ...servers.filter(s => s.lang !== 'dub' && s !== preferred)].filter(Boolean);
+      // Keep playback available when the episode only exposes dubbed streams.
+      if (!candidates.length) candidates = servers;
+    }
+
+    let lastError = null;
+    for (const candidate of candidates) {
+      try {
+        return await exports.resolveStream(animeId, candidate.id);
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw lastError || new Error("No playable servers found for episode " + epNum);
   };
 
   /**
-   * 7. AniSkip Integration (Supports numeric malId or title string with AniList & MAL ID fallback)
+   * 7. AniSkip Integration (AniSkip requires a MyAnimeList ID)
    */
   exports.getSkipTimes = async function(titleOrMalId, epNum) {
     if (!titleOrMalId) return { op: null, ed: null };
@@ -401,9 +419,8 @@
               })
             });
             const m = alRes?.data?.Media;
-            // IMPORTANT: AniSkip expects MyAnimeList ID (idMal)!
+            // AniSkip's endpoint expects a MyAnimeList ID, not AniList's ID.
             if (m?.idMal && !idsToCheck.includes(m.idMal)) idsToCheck.push(m.idMal);
-            if (m?.id && !idsToCheck.includes(m.id)) idsToCheck.push(m.id);
             if (idsToCheck.length > 0) break;
           } catch {}
         }
@@ -424,11 +441,12 @@
 
       for (const targetId of idsToCheck) {
         try {
-          const skipUrl = `${ANISKIP_BASE}/skip-times/${targetId}/${epInt}?types[]=op&types[]=ed&episodeLength=1440`;
+          // AniSkip treats episodeLength=0 as no duration filter.
+          const skipUrl = `${ANISKIP_BASE}/skip-times/${targetId}/${epInt}?types[]=op&types[]=ed&episodeLength=0`;
           const skipData = await requestJson(skipUrl);
           if (skipData && skipData.found && Array.isArray(skipData.results) && skipData.results.length > 0) {
-            const op = skipData.results.find(r => r.type === 'op');
-            const ed = skipData.results.find(r => r.type === 'ed');
+            const op = skipData.results.find(r => r.skipType === 'op');
+            const ed = skipData.results.find(r => r.skipType === 'ed');
             if (op || ed) {
               return {
                 op: op ? [op.interval.startTime, op.interval.endTime] : null,
@@ -486,4 +504,3 @@
   }
 
 })(typeof globalThis !== 'undefined' ? (globalThis.ShinseiProvider = globalThis.__provider = globalThis.__provider || {}) : this);
-

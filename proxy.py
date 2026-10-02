@@ -1,5 +1,6 @@
 """Streaming HLS / M3U8 reverse proxy to bypass CDN CORS restrictions."""
 from __future__ import annotations
+import ipaddress
 import re
 import urllib.parse
 from typing import Optional
@@ -10,6 +11,27 @@ import httpx
 router = APIRouter(prefix="/proxy", tags=["proxy"])
 
 _client: Optional[httpx.AsyncClient] = None
+
+def is_safe_proxy_url(target_url: str) -> bool:
+    """Validate target URL to prevent SSRF against loopback, metadata, and private networks."""
+    try:
+        parsed = urllib.parse.urlparse(target_url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        if hostname.lower() in ("localhost", "127.0.0.1", "::1"):
+            return False
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+                return False
+        except ValueError:
+            pass
+        return True
+    except Exception:
+        return False
 
 def get_http_client() -> httpx.AsyncClient:
     global _client
@@ -39,6 +61,8 @@ async def proxy_m3u8(url: str = Query(...), request: Request = None):
             "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
             "Access-Control-Allow-Headers": "*",
         })
+    if not is_safe_proxy_url(url):
+        raise HTTPException(400, "Invalid or disallowed proxy target URL")
     """Fetch and rewrite m3u8 playlist with CORS headers."""
     client = get_http_client()
     try:
@@ -98,6 +122,8 @@ async def proxy_segment(url: str = Query(...), request: Request = None):
             "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
             "Access-Control-Allow-Headers": "*",
         })
+    if not is_safe_proxy_url(url):
+        raise HTTPException(400, "Invalid or disallowed proxy target URL")
     """Stream video chunks (.ts / .xls) with CORS and range request forwarding."""
     client = get_http_client()
     method = request.method if request else "GET"

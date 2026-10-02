@@ -31,7 +31,18 @@ const API = {
   checkWatchlist: (animeId) => fetch(`/api/user/watchlist/check/${animeId}`).then(r => r.json()),
   
   // AniSkip
-  getSkipTimes: (title, ep, dur) => fetch(`/api/skip/times?title=${encodeURIComponent(title)}&episode=${ep}&duration=${dur}`).then(r => r.json()),
+  getSkipTimes: async (title, ep, dur = 0) => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await fetch(`/api/skip/times?title=${encodeURIComponent(title)}&episode=${ep}&duration=${dur}`);
+        if (!response.ok) throw new Error(`AniSkip request failed (${response.status})`);
+        return await response.json();
+      } catch (error) {
+        if (attempt === 1) throw error;
+        await new Promise(resolve => setTimeout(resolve, 750));
+      }
+    }
+  },
 
   // Binge & Airing Today
   binge: (vibe='hype', length='any', gems=true) => fetch(`/api/anime/binge/recommendations?vibe=${encodeURIComponent(vibe)}&length=${encodeURIComponent(length)}&hidden_gems=${gems}`).then(r => r.json()),
@@ -928,7 +939,7 @@ async function initVideoPlayer(streamUrl, post, episode, nextEpisode, startPosOv
     // AniSkip integration
     let markers = { introStart: null, introEnd: null, creditsStart: null };
     const epNumParsed = isNaN(parseInt(episode.num, 10)) ? 1 : parseInt(episode.num, 10);
-    API.getSkipTimes(post.title, epNumParsed, 1440).then(res => {
+    API.getSkipTimes(post.title, epNumParsed).then(res => {
       if (res.found && res.results) {
         const op = res.results.find(r => r.type === 'op');
         const ed = res.results.find(r => r.type === 'ed');

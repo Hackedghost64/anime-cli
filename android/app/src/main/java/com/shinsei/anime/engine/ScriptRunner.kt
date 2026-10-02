@@ -345,7 +345,8 @@ class ScriptRunner(private val context: Context) {
     }
 
     private suspend fun callJsMethod(methodName: String, args: List<Any?> = emptyList()): String {
-        val ready = initDeferred.await()
+        val ready = withTimeoutOrNull(15_000L) { initDeferred.await() }
+            ?: throw RuntimeException("Timed out waiting for the catalog engine to start")
         if (!ready) throw RuntimeException("Headless JS engine failed to initialize")
 
         val requestId = UUID.randomUUID().toString()

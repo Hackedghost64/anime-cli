@@ -201,7 +201,31 @@ class KyotoResolver:
             data2 = await asyncio.to_thread(_curl_get_json_sync, url, hdrs2, None)
             lst = data2.get("list") if isinstance(data2, dict) else []
             if lst: data = data2
-        servers = [{"id": str(s.get("id")), "lang": "dub" if s.get("lang") == "dub" else "sub", "name": s.get("name") or f"Server {s.get('id')}"} for s in (lst or [])]
+        servers = []
+        # Map common ISO 639 codes to human-readable names and flags
+        _LANG_MAP = {
+            "jpn": ("Japanese", "🇯🇵"), "eng": ("English", "🇺🇸"), "kor": ("Korean", "🇰🇷"),
+            "spa": ("Spanish", "🇪🇸"), "por": ("Portuguese", "🇧🇷"), "fra": ("French", "🇫🇷"),
+            "deu": ("German", "🇩🇪"), "ita": ("Italian", "🇮🇹"), "ara": ("Arabic", "🇸🇦"),
+            "hin": ("Hindi", "🇮🇳"), "zho": ("Chinese", "🇨🇳"), "tha": ("Thai", "🇹🇭"),
+            "ind": ("Indonesian", "🇮🇩"), "vie": ("Vietnamese", "🇻🇳"), "fil": ("Filipino", "🇵🇭"),
+            "msa": ("Malay", "🇲🇾"), "tur": ("Turkish", "🇹🇷"), "rus": ("Russian", "🇷🇺"),
+        }
+        for server in (lst or []):
+            language = str(server.get("lang") or "").strip().lower()
+            is_dub = language.startswith("dub") or language in {"en", "eng", "english"}
+            # Extract actual language code from the server ID (e.g. "70219/eng" → "eng")
+            sid = str(server.get("id") or "")
+            lang_code = sid.split("/")[-1].lower() if "/" in sid else ""
+            lang_name, lang_flag = _LANG_MAP.get(lang_code, (lang_code.upper() or ("Dub" if is_dub else "Sub"), ""))
+            servers.append({
+                "id": sid,
+                "lang": "dub" if is_dub else "sub",
+                "lang_code": lang_code,
+                "language": lang_name,
+                "flag": lang_flag,
+                "name": server.get("name") or f"Server {server.get('id')}"
+            })
         episode_cache().set(key, servers, ttl=900)
         return servers
 

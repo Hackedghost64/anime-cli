@@ -8,7 +8,7 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=for-the-badge)](https://github.com/Hackedghost64/anime-cli/pulls)
 
 **The ultimate anime streaming CLI, batch downloader & private browser app.**  
-Direct mobile APIs • 1080p Kyoto • AniSkip Auto-Skip • Sub & Dub • Binge Roulette • Airing Radar • Zero-Config Mobile Tunnel.
+Direct mobile APIs • 1080p Kyoto • AniSkip skip controls • Sub/Dub where available • Binge Roulette • Airing Radar • Zero-Config Mobile Tunnel.
 
 [1-Command Install](#-install-with-1-command) • [Interactive CLI](#-interactive-cli-hub) • [Key Features](#-features) • [CLI Commands](#-cli-commands--flags) • [Shortcuts Guide](#-shortcuts-guide) • [Phone Setup](#-watch-on-your-phone-pwa--sleep-inhibitor)
 
@@ -108,8 +108,8 @@ anime-cli --build-apk --install  # Automatically installs onto phone via ADB
 | :--- | :---: | :---: |
 | **Backend Method** | Fragile web scrapers (breaks frequently) | Direct Mobile App JSON APIs + TLS Chrome Fingerprinting ⚡ |
 | **Cloudflare / Captchas** | Regularly blocked | Bypassed smoothly via JA3/HTTP2 impersonation |
-| **English Dub Support** | Inconsistent / often missing | Guaranteed Sub & Dub options for every episode 🎙️ |
-| **Auto-Skip Openings & Endings** | Manual scrubbing | Automated AniSkip in both MPV & Browser ⏩ |
+| **English Dub Support** | Inconsistent / often missing | Uses dub servers listed by the upstream provider; availability varies by episode 🎙️ |
+| **Openings & Endings** | Manual scrubbing | AniSkip auto-skip in MPV and skip controls in the browser ⏩ |
 | **Binge Mood Discovery** | None | Curated **Binge Roulette** with AniList GraphQL + history dedup 🎲 |
 | **Today's Airing Radar** | None | Live 24h broadcast countdowns (`🟢 Aired`, `🟡 Airing in`) 📅 |
 | **Batch Episode Downloader** | Single episode only | Multi-episode selector (`1-12`, `all`, `fzf -m`) to 1080p MP4 📥 |
@@ -131,7 +131,7 @@ Running `anime-cli` with no arguments launches the unified interactive dashboard
   ╚════██║ ██╔══██║██║██║╚██╗██║╚════██║██╔══╝  ██║    ██║     ██║     ██║
   ███████║ ██║  ██║██║██║ ╚████║███████║███████╗██╗    ╚██████╗███████╗██║
   ╚══════╝ ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝╚═╝     ╚═════╝╚══════╝╚═╝
-    Direct API · 1080p Kyoto · AniSkip Auto-Skip · Sub & Dub · Zero-Config
+    Direct API · 1080p Kyoto · AniSkip Auto-Skip · Sub/Dub where available · Zero-Config
 
 Choose an action > 
 > 🔍 Search & Watch Anime
@@ -151,7 +151,7 @@ Choose an action >
 
 ### 1. Terminal Streaming with MPV (`anime-cli "chainsaw man"`)
 * **Hydrated Anime Metadata:** Shows proper titles, episode numbers, score ratings, and episode names via interactive `fzf`.
-* **Sub & Dub Support:** Resolves both Japanese Sub and English Dub servers for every episode.
+* **Sub & Dub Support:** Selects a matching audio server when the upstream provider lists one; availability varies by episode.
 * **⚡ AniSkip Auto-Skip:** Automatically queries the AniSkip database and directs MPV to skip openings and endings automatically without touching the keyboard.
 * **Instant 1080p HLS Playback:** Starts playing in under a second.
 
@@ -191,7 +191,7 @@ Choose an action >
 * **Audio & Preference Persistence:** Remembers your SUB or DUB selection across entire anime series via `localStorage`, and persists volume, mute state, and playback speeds (`0.75x` - `2.0x`).
 * **Resilient Server Switching & Fallback:** Switching servers preserves your exact playback second without resetting to zero. If an upstream stream drops, a 1-click fallback button offers immediate backup server failover.
 * **Session Persistence & Exit-Hooks:** Syncs playback timestamps every 10 seconds via background heartbeat and fires an exit hook on route change or browser close to guarantee cross-device resume.
-* **⚡ AniSkip Auto-Skip:** Automatically detects anime openings and endings via AniList. Clicking "Skip Outro" provides zero-lag autoplay into the next episode.
+* **⚡ AniSkip Skip Controls:** Looks up AniSkip timings using the show's MAL ID (resolved through AniList or Jikan when needed) and shows manual opening/ending skip controls when timings are available. The browser retries a failed request once; availability depends on AniSkip coverage.
 * **Mobile Gestures:** Double-tap left/right edges to seek $\pm 10$s with ripple animations. Accidental double-taps in the middle are safely guarded against unwanted full-screen or minimize toggles.
 * **PiP & Theater Mode:** Full Picture-in-Picture (`P`), Theater Mode (`T`), and dedicated Help modal (`?` / `H`).
 
@@ -200,10 +200,10 @@ Choose an action >
 * **Autonomous "Dumb Runner" Architecture:** The APK runs a hot-reloadable JavaScript provider bundle (`provider.bundle.js`) using Android's native headless V8 engine with full modern ES6+ and Cloudflare Turnstile resilience.
 * **1:1 Crunchyroll Player Screen:**
   - Center 3-button touch controls: `[⏪ 10]` `[ ▶ / ❚❚ ]` `[10 ⏩]`.
-  - Floating `[⚡ Skip Intro]` / `[⚡ Skip Outro]` buttons powered by real-time AniSkip API.
+  - Floating `[⚡ Skip Intro]` / `[⚡ Skip Outro]` buttons use AniSkip timings when available. The app retries a failed lookup once; timings depend on AniSkip coverage and matching MAL metadata.
   - Precision dual-axis vertical touch gestures: left-side screen swipe for brightness, right-side swipe for volume.
   - Double-tap left/right edges for $\pm 10$s curved ripples.
-  - Top bar with episode badge, SUB/DUB toggle, `[⏭ Next]` episode button beside `[⚙ Settings]`, and aspect ratio zoom toggle.
+  - Top bar with episode badge, SUB/DUB toggle, `[⏭ Next]` episode button beside `[⚙ Settings]`, and aspect ratio zoom toggle. Dub playback tries each dub server reported for that episode and shows an error when none are listed.
   - True OLED pitch black (`#0B0C0E`) cinema styling.
   - Native Android 12+ Picture-in-Picture (PiP) and auto-saving watch progress to Room DB.
 * **⚡ P2P Watch History Sync (<50ms):**

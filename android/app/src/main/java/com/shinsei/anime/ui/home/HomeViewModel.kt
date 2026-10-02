@@ -103,13 +103,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (q.isEmpty()) return
 
         viewModelScope.launch(Dispatchers.IO) {
-            _uiState.value = _uiState.value.copy(isSearching = true, isLoading = true)
+            _uiState.value = _uiState.value.copy(isSearching = true, isLoading = true, error = null)
             try {
                 val searchJsonStr = scriptRunner.search(q)
                 val results = parseAnimeCards(searchJsonStr)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    searchResults = results
+                    searchResults = results,
+                    error = null
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -124,7 +125,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(
             searchQuery = "",
             isSearching = false,
-            searchResults = emptyList()
+            searchResults = emptyList(),
+            error = null
         )
     }
 

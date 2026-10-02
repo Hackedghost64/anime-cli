@@ -1,6 +1,7 @@
 """Anilab2 async client — ported from hacking/anilab_cli.py, now typed & cached."""
 from __future__ import annotations
 import asyncio
+import re
 from typing import Any, Dict, List, Optional
 import httpx
 try:
@@ -8,6 +9,40 @@ try:
 except ImportError:
     from ..config import settings
 from .cache import catalog_cache
+
+
+def _title_relevance(query: str, title: str) -> float:
+    """Score how well *title* matches *query* (higher = better match).
+
+    Scoring rules (cumulative):
+      +10  query appears as-is inside the title  ("demon slayer" ⊂ "Demon Slayer: …")
+      +5   every query word is found in the title
+      +N   per-word overlap bonus (1 point per matching word)
+      +3   title starts with the query
+      -1   length penalty for very long titles (discourages OVAs/specials over the main series)
+    """
+    q = re.sub(r"[^\w\s]", "", query.lower()).split()
+    t_raw = title.lower()
+    t = re.sub(r"[^\w\s]", "", t_raw).split()
+    if not q or not t:
+        return 0.0
+    score = 0.0
+    q_joined = " ".join(q)
+    t_joined = " ".join(t)
+    # Exact substring match
+    if q_joined in t_joined:
+        score += 10
+    # Every query word present
+    if all(w in t for w in q):
+        score += 5
+    # Per-word overlap
+    score += sum(1 for w in q if w in t)
+    # Starts-with bonus
+    if t_joined.startswith(q_joined):
+        score += 3
+    # Penalise long titles slightly (main season is usually shorter than OVA/movie names)
+    score -= len(t) * 0.05
+    return score
 
 class AnilabClient:
     """Async client for Anilab2 catalog API. All headers from config.yaml."""
@@ -68,6 +103,11 @@ class AnilabClient:
                 else:
                     hydrated_posts.append(p)
             posts = hydrated_posts
+
+        # Re-rank by title relevance so the best match appears first
+        # (upstream ordering is often wrong, e.g. "Onigiri" before "Demon Slayer")
+        if posts and len(posts) > 1:
+            posts.sort(key=lambda p: _title_relevance(query, p.get("title") or p.get("name") or ""), reverse=True)
 
         catalog_cache().set(key, posts, ttl=3600)
         return posts

@@ -571,6 +571,13 @@ def _play_mpv(
     if skip_data:
         op = skip_data.get("op")
         ed = skip_data.get("ed")
+        if not op or not ed:
+            for item in skip_data.get("results", []):
+                stype = str(item.get("type", "")).lower()
+                if stype == "op" and not op:
+                    op = item
+                elif stype == "ed" and not ed:
+                    ed = item
         if op and isinstance(op, dict) and "start" in op and "end" in op:
             op_start = float(op["start"])
             op_end = float(op["end"])
