@@ -36,3 +36,9 @@ android/app/build/
 android/.kotlin/
 android/local.properties
 android/*.iml
+
+# C Lite Build Artifacts
+lite/bin/
+lite/src/*.o
+lite/tests/*.o
+.superpowers/
