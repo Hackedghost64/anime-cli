@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
-import { Zap, Activity, Clock, ShieldCheck, Check, X, AlertTriangle, Layers, Cpu } from 'lucide-react';
-import { TechText } from './TechText';
+import React from 'react';
+import { Clock, Zap, Cpu } from 'lucide-react';
 import { CountUp } from './CountUp';
 
 interface BenchmarkRow {
@@ -49,7 +48,7 @@ const BENCHMARK_DATA: BenchmarkRow[] = [
     metric: '1080p Master HLS Feeds',
     lite: '✅ Kyoto 1080p Stream',
     cli: '✅ Kyoto 1080p Stream',
-    anicli: '⚠️ Compressed / Mixed',
+    anicli: '⚠️ Mixed / Unverified',
     winner: 'both',
     note: 'Full bitrate adaptive master playlist',
   },
@@ -87,7 +86,7 @@ const BENCHMARK_DATA: BenchmarkRow[] = [
   },
   {
     metric: 'Batch Downloader',
-    lite: '❌ Terminal only',
+    lite: '❌ Terminal stream only',
     cli: '✅ 1080p MP4 Batch (-o)',
     anicli: '⚠️ Single episode only',
     winner: 'cli',
@@ -96,19 +95,23 @@ const BENCHMARK_DATA: BenchmarkRow[] = [
 ];
 
 export const BenchmarksSection: React.FC = () => {
-  const [activeFilter, setActiveFilter] = useState<'all' | 'speed' | 'features'>('all');
-
   return (
-    <section id="benchmarks" className="py-20 border-t border-slate-800/80 bg-[#08090a] relative font-mono">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <section id="benchmarks" className="py-24 border-t border-white/10 bg-black text-white font-mono">
+      <div className="mx-auto max-w-6xl px-6">
         
         {/* Header */}
-        <div className="max-w-3xl mb-12 space-y-3">
-          <TechText tag="METRICS_LAB" glowColor="green" className="text-2xl sm:text-4xl font-bold font-sans">
-            Interactive Benchmarks: <br />
-            <span className="text-white">Hard Data Under Real-World Gigabit Loads.</span>
-          </TechText>
-          <p className="text-slate-400 text-sm leading-relaxed">
+        <div className="max-w-3xl mb-14 space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-zinc-950 text-xs text-zinc-400 uppercase tracking-widest">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#ff640a]" />
+            <span>Chapter 04 // Empirical Benchmarks</span>
+          </div>
+
+          <h2 className="text-3xl sm:text-5xl font-black font-sans tracking-tight text-white leading-tight">
+            Hard Data Under <br />
+            <span className="text-[#ff640a]">Real-World Loads.</span>
+          </h2>
+
+          <p className="text-zinc-400 text-sm sm:text-base font-light font-sans leading-relaxed">
             All benchmarks measured under identical Linux Kernel 6.8 gigabit network conditions.
             See how the compiled C binary and Python Hub outclass legacy shell scrapers.
           </p>
@@ -118,139 +121,147 @@ export const BenchmarksSection: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           
           {/* Card 1: Cold Start */}
-          <div className="rounded-xl border border-cyber-cyan/30 bg-[#0d121a] p-6 shadow-glow-cyan relative overflow-hidden">
-            <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-              <span className="flex items-center gap-1.5 text-cyber-cyan font-bold">
-                <Clock className="h-4 w-4" />
-                STARTUP LATENCY
-              </span>
-              <span>10x FASTER</span>
+          <div className="rounded-2xl border border-white/10 bg-zinc-950 p-6 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between text-xs text-zinc-400 mb-3">
+                <span className="flex items-center gap-1.5 text-white font-bold">
+                  <Clock className="h-4 w-4 text-[#ff640a]" />
+                  STARTUP LATENCY
+                </span>
+                <span className="text-[#ff640a] text-[10px] font-bold">10x FASTER</span>
+              </div>
+              <div className="text-3xl sm:text-4xl font-extrabold text-white mb-2 font-sans">
+                <CountUp to={3.8} decimals={1} suffix=" ms" />
+              </div>
+              <p className="text-xs text-zinc-400 font-sans leading-relaxed mb-6">
+                <code>anime-lite</code> executes instantly with zero Python runtime initialization or dynamic import penalties.
+              </p>
             </div>
-            <div className="text-3xl sm:text-4xl font-extrabold text-white mb-2">
-              <CountUp to={3.8} decimals={1} prefix="⚡ " suffix=" ms" />
-            </div>
-            <p className="text-xs text-slate-400 mb-4">
-              `anime-lite` loads instantaneously with zero Python runtime initialization or dynamic import penalties.
-            </p>
-            {/* Visual Progress comparison bar */}
-            <div className="space-y-1.5 text-[11px]">
+
+            <div className="space-y-2 text-[11px] pt-4 border-t border-white/5">
               <div>
-                <div className="flex justify-between text-slate-400 text-[10px]">
-                  <span>anime-lite (C99)</span>
-                  <span className="text-cyber-cyan font-bold">3.8 ms</span>
+                <div className="flex justify-between text-[10px] mb-1">
+                  <span className="text-white">anime-lite (C99)</span>
+                  <span className="text-[#ff640a] font-bold">3.8 ms</span>
                 </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-cyber-cyan rounded-full w-[4%]" />
+                <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#ff640a] rounded-full w-[4%]" />
                 </div>
               </div>
               <div>
-                <div className="flex justify-between text-slate-400 text-[10px]">
+                <div className="flex justify-between text-[10px] mb-1 text-zinc-500">
                   <span>ani-cli (Bash forks)</span>
-                  <span className="text-slate-300">145 ms</span>
+                  <span>145 ms</span>
                 </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-slate-600 rounded-full w-[38%]" />
+                <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                  <div className="h-full bg-zinc-600 rounded-full w-[38%]" />
                 </div>
               </div>
               <div>
-                <div className="flex justify-between text-slate-400 text-[10px]">
+                <div className="flex justify-between text-[10px] mb-1 text-zinc-500">
                   <span>anime-cli (Python)</span>
-                  <span className="text-slate-300">380 ms</span>
+                  <span>380 ms</span>
                 </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-cyber-green rounded-full w-[95%]" />
+                <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                  <div className="h-full bg-zinc-700 rounded-full w-[95%]" />
                 </div>
               </div>
             </div>
           </div>
 
           {/* Card 2: Resolution Speed */}
-          <div className="rounded-xl border border-cyber-green/30 bg-[#0d121a] p-6 shadow-glow-green relative overflow-hidden">
-            <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-              <span className="flex items-center gap-1.5 text-cyber-green font-bold">
-                <Zap className="h-4 w-4" />
-                STREAM HOP SPEED
-              </span>
-              <span>8x FASTER</span>
+          <div className="rounded-2xl border border-white/10 bg-zinc-950 p-6 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between text-xs text-zinc-400 mb-3">
+                <span className="flex items-center gap-1.5 text-white font-bold">
+                  <Zap className="h-4 w-4 text-[#ff640a]" />
+                  STREAM HOP SPEED
+                </span>
+                <span className="text-[#ff640a] text-[10px] font-bold">8x FASTER</span>
+              </div>
+              <div className="text-3xl sm:text-4xl font-extrabold text-white mb-2 font-sans">
+                <CountUp to={480} decimals={0} suffix=" ms" />
+              </div>
+              <p className="text-xs text-zinc-400 font-sans leading-relaxed mb-6">
+                Single-hop direct JSON query vs. ani-cli making 5-8 sequential HTML downloads and iframe decryptions.
+              </p>
             </div>
-            <div className="text-3xl sm:text-4xl font-extrabold text-white mb-2">
-              <CountUp to={480} decimals={0} prefix="⚡ " suffix=" ms" />
-            </div>
-            <p className="text-xs text-slate-400 mb-4">
-              Single-hop direct JSON query vs. ani-cli having to make 5-8 sequential HTML downloads and iframe decryptions.
-            </p>
-            <div className="space-y-1.5 text-[11px]">
+
+            <div className="space-y-2 text-[11px] pt-4 border-t border-white/5">
               <div>
-                <div className="flex justify-between text-slate-400 text-[10px]">
-                  <span>anime-lite (Direct Mobile API)</span>
-                  <span className="text-cyber-green font-bold">480 ms</span>
+                <div className="flex justify-between text-[10px] mb-1">
+                  <span className="text-white">anime-lite (Direct Mobile)</span>
+                  <span className="text-[#ff640a] font-bold">480 ms</span>
                 </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-cyber-green rounded-full w-[12%]" />
+                <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#ff640a] rounded-full w-[12%]" />
                 </div>
               </div>
               <div>
-                <div className="flex justify-between text-slate-400 text-[10px]">
-                  <span>anime-cli (Python Async HTTP/2)</span>
-                  <span className="text-slate-300">720 ms</span>
+                <div className="flex justify-between text-[10px] mb-1 text-zinc-500">
+                  <span>anime-cli (Python Async)</span>
+                  <span>720 ms</span>
                 </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-cyber-cyan rounded-full w-[18%]" />
+                <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                  <div className="h-full bg-zinc-600 rounded-full w-[18%]" />
                 </div>
               </div>
               <div>
-                <div className="flex justify-between text-slate-400 text-[10px]">
-                  <span>ani-cli (Multi-Page Scraper)</span>
-                  <span className="text-red-400">3,800 ms</span>
+                <div className="flex justify-between text-[10px] mb-1 text-zinc-500">
+                  <span>ani-cli (HTML Scraping)</span>
+                  <span>3,800 ms</span>
                 </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-red-500/80 rounded-full w-[98%]" />
+                <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                  <div className="h-full bg-zinc-700 rounded-full w-[98%]" />
                 </div>
               </div>
             </div>
           </div>
 
           {/* Card 3: RAM Footprint */}
-          <div className="rounded-xl border border-cyber-purple/30 bg-[#0d121a] p-6 shadow-glow-purple relative overflow-hidden">
-            <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-              <span className="flex items-center gap-1.5 text-cyber-purple font-bold">
-                <Cpu className="h-4 w-4" />
-                RAM FOOTPRINT (RSS)
-              </span>
-              <span>ULTRA LEAN</span>
+          <div className="rounded-2xl border border-white/10 bg-zinc-950 p-6 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between text-xs text-zinc-400 mb-3">
+                <span className="flex items-center gap-1.5 text-white font-bold">
+                  <Cpu className="h-4 w-4 text-[#ff640a]" />
+                  RAM FOOTPRINT (RSS)
+                </span>
+                <span className="text-[#ff640a] text-[10px] font-bold">ULTRA LEAN</span>
+              </div>
+              <div className="text-3xl sm:text-4xl font-extrabold text-white mb-2 font-sans">
+                <CountUp to={4.1} decimals={1} prefix="~" suffix=" MB" />
+              </div>
+              <p className="text-xs text-zinc-400 font-sans leading-relaxed mb-6">
+                Pure C99 with vendored cJSON and zero third-party dynamic bloat. Runs effortlessly even on a 512MB Raspberry Pi Zero.
+              </p>
             </div>
-            <div className="text-3xl sm:text-4xl font-extrabold text-white mb-2">
-              <CountUp to={4.1} decimals={1} prefix="~" suffix=" MB" />
-            </div>
-            <p className="text-xs text-slate-400 mb-4">
-              Compiled C99 with vendored cJSON and zero third-party dynamic bloat. Runs smoothly even on a 512MB Raspberry Pi Zero.
-            </p>
-            <div className="space-y-1.5 text-[11px]">
+
+            <div className="space-y-2 text-[11px] pt-4 border-t border-white/5">
               <div>
-                <div className="flex justify-between text-slate-400 text-[10px]">
-                  <span>anime-lite</span>
-                  <span className="text-cyber-purple font-bold">4.1 MB</span>
+                <div className="flex justify-between text-[10px] mb-1">
+                  <span className="text-white">anime-lite (C99)</span>
+                  <span className="text-[#ff640a] font-bold">4.1 MB</span>
                 </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-cyber-purple rounded-full w-[11%]" />
+                <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#ff640a] rounded-full w-[11%]" />
                 </div>
               </div>
               <div>
-                <div className="flex justify-between text-slate-400 text-[10px]">
-                  <span>ani-cli (Subshells)</span>
-                  <span className="text-slate-300">18.4 MB</span>
+                <div className="flex justify-between text-[10px] mb-1 text-zinc-500">
+                  <span>ani-cli (Bash forks)</span>
+                  <span>18.4 MB</span>
                 </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-slate-600 rounded-full w-[48%]" />
+                <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                  <div className="h-full bg-zinc-600 rounded-full w-[48%]" />
                 </div>
               </div>
               <div>
-                <div className="flex justify-between text-slate-400 text-[10px]">
+                <div className="flex justify-between text-[10px] mb-1 text-zinc-500">
                   <span>anime-cli (Python suite)</span>
-                  <span className="text-slate-300">38.2 MB</span>
+                  <span>38.2 MB</span>
                 </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-cyber-cyan rounded-full w-[95%]" />
+                <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                  <div className="h-full bg-zinc-700 rounded-full w-[95%]" />
                 </div>
               </div>
             </div>
@@ -259,30 +270,30 @@ export const BenchmarksSection: React.FC = () => {
         </div>
 
         {/* Detailed Comparison Matrix Table */}
-        <div className="overflow-x-auto rounded-xl border border-slate-800 bg-[#0b0e14] shadow-2xl">
+        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-zinc-950">
           <table className="w-full text-left text-xs">
-            <thead className="border-b border-slate-800 bg-[#080a0e] text-slate-400 uppercase tracking-wider text-[11px]">
+            <thead className="border-b border-white/10 bg-black text-zinc-400 uppercase tracking-wider text-[11px]">
               <tr>
                 <th className="px-5 py-4 font-bold">Capability / Metric</th>
-                <th className="px-5 py-4 font-bold text-cyber-cyan">anime-lite (C Edition ⚡)</th>
-                <th className="px-5 py-4 font-bold text-cyber-green">anime-cli (Python Hub 🐍)</th>
-                <th className="px-5 py-4 font-bold text-slate-400">ani-cli (Shell Scrapers 🐚)</th>
+                <th className="px-5 py-4 font-bold text-[#ff640a]">anime-lite (C Edition)</th>
+                <th className="px-5 py-4 font-bold text-white">anime-cli (Python Hub)</th>
+                <th className="px-5 py-4 font-bold text-zinc-500">ani-cli (Legacy Scraper)</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/80">
+            <tbody className="divide-y divide-white/5">
               {BENCHMARK_DATA.map((row, i) => (
-                <tr key={i} className="hover:bg-slate-900/40 transition-colors">
+                <tr key={i} className="hover:bg-white/[0.02] transition-colors">
                   <td className="px-5 py-3.5 font-semibold text-white">
                     <div>{row.metric}</div>
-                    {row.note && <div className="text-[10px] text-slate-500 font-normal">{row.note}</div>}
+                    {row.note && <div className="text-[10px] text-zinc-500 font-normal font-sans">{row.note}</div>}
                   </td>
-                  <td className={`px-5 py-3.5 ${row.winner === 'lite' || row.winner === 'both' ? 'text-cyber-cyan font-semibold' : 'text-slate-300'}`}>
+                  <td className={`px-5 py-3.5 ${row.winner === 'lite' || row.winner === 'both' ? 'text-[#ff640a] font-semibold' : 'text-zinc-300'}`}>
                     {row.lite}
                   </td>
-                  <td className={`px-5 py-3.5 ${row.winner === 'cli' || row.winner === 'both' ? 'text-cyber-green font-semibold' : 'text-slate-300'}`}>
+                  <td className={`px-5 py-3.5 ${row.winner === 'cli' || row.winner === 'both' ? 'text-white font-semibold' : 'text-zinc-300'}`}>
                     {row.cli}
                   </td>
-                  <td className="px-5 py-3.5 text-slate-400">
+                  <td className="px-5 py-3.5 text-zinc-500">
                     {row.anicli}
                   </td>
                 </tr>

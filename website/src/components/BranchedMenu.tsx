@@ -23,8 +23,6 @@ interface BranchedMenuProps {
 }
 
 export const BranchedMenu: React.FC<BranchedMenuProps> = ({
-  drawDuration = 0.5,
-  foldDuration = 0.3,
   className = '',
   onSelect,
 }) => {
@@ -39,157 +37,116 @@ export const BranchedMenu: React.FC<BranchedMenuProps> = ({
       id: 'trinity',
       label: 'The Trinity Ecosystem',
       badge: '3-TIER',
-      icon: <Layers className="w-4 h-4 text-cyber-cyan" />,
+      icon: <Layers className="w-4 h-4 text-[#ff640a]" />,
       children: [
-        { id: 'anime-lite', label: 'anime-lite (C Edition ⚡)', href: '#anime-lite', tag: '<5ms' },
-        { id: 'anime-cli', label: 'anime-cli (Python Hub 🐍)', href: '#anime-cli', tag: 'Full' },
-        { id: 'shinsei-android', label: 'Shinsei Anime (Android 📱)', href: '#shinsei-android', tag: 'APK' },
-        { id: 'config-json', label: 'Central config.json (SSOT ⚙️)', href: '#config-json', tag: 'Unified' },
+        { id: 'anime-lite', label: 'anime-lite (C Edition)', href: '#anime-lite', tag: '3.8ms' },
+        { id: 'anime-cli', label: 'anime-cli (Python Hub)', href: '#anime-cli', tag: 'Full' },
+        { id: 'shinsei-android', label: 'Shinsei Anime (Android)', href: '#shinsei-android', tag: 'APK' },
+        { id: 'config-json', label: 'Central config.json (SSOT)', href: '#config-json', tag: 'Sync' },
       ],
     },
     {
       id: 'benchmarks',
       label: 'Speed & Metrics Matrix',
-      badge: 'VS ANI-CLI',
-      icon: <Zap className="w-4 h-4 text-cyber-green" />,
+      badge: 'EMPIRICAL',
+      icon: <Zap className="w-4 h-4 text-[#ff640a]" />,
       children: [
         { id: 'startup', label: '3.8ms Cold Startup', href: '#benchmarks', tag: '3.8ms' },
         { id: 'resolution', label: '480ms Stream Hops', href: '#benchmarks', tag: '480ms' },
-        { id: 'memory', label: '4MB RSS RAM Footprint', href: '#benchmarks', tag: '4MB' },
-      ],
-    },
-    {
-      id: 'cli-simulator',
-      label: 'Live Terminal Simulator',
-      badge: 'INTERACTIVE',
-      icon: <Terminal className="w-4 h-4 text-cyber-orange" />,
-      children: [
-        { id: 'cmd-lite', label: 'anime-lite "naruto" -s', href: '#terminal', tag: 'fzf' },
-        { id: 'cmd-binge', label: 'anime-cli -B (Roulette)', href: '#terminal', tag: 'Vibe' },
-        { id: 'cmd-radar', label: 'anime-cli --today (Radar)', href: '#terminal', tag: 'Live' },
+        { id: 'memory', label: '4.1MB RSS RAM Footprint', href: '#benchmarks', tag: '4.1MB' },
       ],
     },
     {
       id: 'docs',
-      label: 'Documentation & Guide',
-      badge: 'MANUAL',
-      icon: <BookOpen className="w-4 h-4 text-cyber-purple" />,
+      label: 'Player Controls & Manual',
+      badge: 'SHORTCUTS',
+      icon: <BookOpen className="w-4 h-4 text-[#ff640a]" />,
       children: [
-        { id: 'install', label: 'Universal 1-Click Install', href: '#install', tag: 'CLI' },
-        { id: 'shortcuts', label: 'MPV & Web Player Shortcuts', href: '#shortcuts', tag: 'Keys' },
-        { id: 'releases', label: 'Download Binaries & APK', href: '#downloads', tag: 'Releases' },
+        { id: 'shortcuts-mpv', label: 'MPV Native Controls', href: '#shortcuts', tag: 'mpv' },
+        { id: 'shortcuts-web', label: 'Obsidian Web PWA Controls', href: '#shortcuts', tag: 'web' },
+        { id: 'api-spec', label: 'Kyoto HLS Protocol Spec', href: '#pipeline', tag: 'hls' },
       ],
     },
   ];
 
-  const toggleBranch = (branchId: string) => {
+  const toggleBranch = (id: string) => {
     setExpandedBranches((prev) => ({
       ...prev,
-      [branchId]: !prev[branchId],
+      [id]: !prev[id],
     }));
   };
 
-  const handleItemClick = (id: string, href: string) => {
-    if (onSelect) {
-      onSelect(id, href);
-    } else {
-      const el = document.querySelector(href);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth' });
-      }
-    }
-  };
-
   return (
-    <div className={`relative font-mono select-none ${className}`}>
-      {/* Root Node Header */}
-      <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-800 bg-[#0c1017] shadow-cyber-card">
-        <div className="flex h-7 w-7 items-center justify-center rounded bg-cyber-cyan/10 border border-cyber-cyan/30 text-cyber-cyan">
-          <Cpu className="h-4 w-4" />
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-white tracking-wider">PROJECT_TREE</span>
-            <span className="text-[10px] text-cyber-cyan font-semibold">ROOT://SHINSEI</span>
-          </div>
-          <p className="text-[10px] text-slate-400">Navigation & Architecture Schema</p>
-        </div>
-      </div>
-
-      {/* Main Branches Container with SVG Connector Trunk */}
-      <div className="relative pl-6 pt-3 space-y-4">
-        {/* Main Vertical SVG Trunk Line */}
-        <div className="absolute left-3 top-3 bottom-6 w-[2px] bg-gradient-to-b from-cyber-cyan/40 via-cyber-green/30 to-cyber-purple/20" />
-
-        {branches.map((branch, index) => {
+    <div className={`font-mono text-xs select-none ${className}`}>
+      <div className="space-y-3">
+        {branches.map((branch) => {
           const isExpanded = !!expandedBranches[branch.id];
 
           return (
-            <div key={branch.id} className="relative">
-              {/* Horizontal SVG Branch Connector */}
-              <div className="absolute -left-3 top-4 w-3 h-[2px] bg-slate-700/80" />
-
-              {/* Branch Header Button */}
+            <div key={branch.id} className="rounded-xl border border-white/5 bg-black p-3">
+              {/* Branch Trunk Header */}
               <button
                 type="button"
                 onClick={() => toggleBranch(branch.id)}
-                className={`w-full flex items-center justify-between gap-2.5 px-3 py-2 rounded-md border text-left transition-all duration-200 ${
-                  isExpanded
-                    ? 'border-cyber-cyan/40 bg-[#0f141d] text-white shadow-sm'
-                    : 'border-slate-800/80 bg-[#090c10] text-slate-300 hover:border-slate-700 hover:text-white'
-                }`}
+                className="w-full flex items-center justify-between text-left group text-white hover:text-[#ff640a] transition-colors"
               >
-                <div className="flex items-center gap-2">
-                  <motion.div
-                    animate={{ rotate: isExpanded ? 90 : 0 }}
-                    transition={{ duration: foldDuration }}
-                  >
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                  </motion.div>
-                  {branch.icon}
-                  <span className="text-xs font-semibold">{branch.label}</span>
+                <div className="flex items-center gap-2.5">
+                  <span className="p-1.5 rounded-lg bg-zinc-900 border border-white/5 group-hover:border-[#ff640a]/30 transition-colors">
+                    {branch.icon}
+                  </span>
+                  <span className="font-semibold text-xs text-white group-hover:text-[#ff640a] transition-colors">
+                    {branch.label}
+                  </span>
                 </div>
 
-                {branch.badge && (
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-slate-700 bg-slate-800/80 text-slate-400">
-                    {branch.badge}
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {branch.badge && (
+                    <span className="rounded border border-white/10 bg-zinc-900 px-1.5 py-0.5 text-[9px] text-zinc-400">
+                      {branch.badge}
+                    </span>
+                  )}
+                  <ChevronRight
+                    className={`w-3.5 h-3.5 text-zinc-500 transition-transform duration-200 ${
+                      isExpanded ? 'rotate-90 text-[#ff640a]' : ''
+                    }`}
+                  />
+                </div>
               </button>
 
-              {/* Sub-Branch Children with Animated SVG Tree Lines */}
+              {/* Branch Children */}
               <AnimatePresence initial={false}>
                 {isExpanded && branch.children && (
                   <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: foldDuration }}
-                    className="relative pl-6 pt-2 space-y-1.5 overflow-hidden"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden pl-6 pt-3 space-y-1 relative"
                   >
-                    {/* Sub-branch vertical connector */}
-                    <div className="absolute left-3 top-0 bottom-3 w-[1px] bg-slate-800" />
+                    {/* SVG Connector Line */}
+                    <div className="absolute left-3 top-3 bottom-3 w-[1px] bg-white/10" />
 
                     {branch.children.map((child) => (
-                      <div key={child.id} className="relative flex items-center group">
-                        {/* Sub-branch horizontal tick */}
-                        <div className="absolute -left-3 top-1/2 w-3 h-[1px] bg-slate-800 group-hover:bg-cyber-cyan/60" />
-
-                        <button
-                          type="button"
-                          onClick={() => handleItemClick(child.id, child.href)}
-                          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded text-xs text-slate-400 hover:text-cyber-cyan hover:bg-cyber-cyan/5 transition-colors text-left"
-                        >
-                          <span className="group-hover:translate-x-1 transition-transform">
-                            {child.label}
+                      <a
+                        key={child.id}
+                        href={child.href}
+                        onClick={(e) => {
+                          if (onSelect) {
+                            e.preventDefault();
+                            onSelect(child.id, child.href);
+                          }
+                        }}
+                        className="group flex items-center justify-between py-1.5 px-3 rounded-lg hover:bg-zinc-900 text-zinc-400 hover:text-white transition-all text-xs"
+                      >
+                        <span className="truncate group-hover:text-white">
+                          {child.label}
+                        </span>
+                        {child.tag && (
+                          <span className="rounded bg-black border border-white/10 px-1.5 py-0.2 text-[10px] text-zinc-500 group-hover:text-[#ff640a] group-hover:border-[#ff640a]/30 transition-colors">
+                            {child.tag}
                           </span>
-                          {child.tag && (
-                            <span className="text-[9px] font-mono text-slate-500 group-hover:text-cyber-cyan/80">
-                              {child.tag}
-                            </span>
-                          )}
-                        </button>
-                      </div>
+                        )}
+                      </a>
                     ))}
                   </motion.div>
                 )}

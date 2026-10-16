@@ -5,6 +5,7 @@ interface PixelTransitionProps {
   firstContent: React.ReactNode;
   secondContent: React.ReactNode;
   gridSize?: number;
+  pixelColor?: string;
   className?: string;
   trigger?: 'hover' | 'click';
 }
@@ -13,6 +14,7 @@ export const PixelTransition: React.FC<PixelTransitionProps> = ({
   firstContent,
   secondContent,
   gridSize = 8,
+  pixelColor = '#ff640a',
   className = '',
   trigger = 'hover',
 }) => {
@@ -36,7 +38,7 @@ export const PixelTransition: React.FC<PixelTransitionProps> = ({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={handleClick}
-      className={`relative overflow-hidden rounded-xl border border-slate-800 bg-[#0b0e14] cursor-pointer select-none ${className}`}
+      className={`relative overflow-hidden rounded-2xl border border-white/10 bg-black cursor-pointer select-none ${className}`}
     >
       {/* Background/Second Content (Revealed on active) */}
       <div className="absolute inset-0 z-0 flex items-center justify-center p-4">
@@ -61,7 +63,6 @@ export const PixelTransition: React.FC<PixelTransitionProps> = ({
         }}
       >
         {Array.from({ length: totalPixels }).map((_, i) => {
-          // Staggered pseudo-random delay based on coordinate distance or index hash
           const col = i % gridSize;
           const row = Math.floor(i / gridSize);
           const delay = ((col + row) / (gridSize * 2)) * 0.25 + (Math.sin(i) * 0.05 + 0.05);
@@ -78,16 +79,20 @@ export const PixelTransition: React.FC<PixelTransitionProps> = ({
                 duration: 0.35,
                 delay: isRevealed ? delay : 0,
               }}
-              className="bg-[#5f8bff]/20 border-[0.5px] border-[#5f8bff]/30 backdrop-blur-sm"
+              style={{
+                backgroundColor: `${pixelColor}30`,
+                borderColor: `${pixelColor}50`,
+              }}
+              className="border-[0.5px] backdrop-blur-sm"
             />
           );
         })}
       </div>
 
       {/* Interactive Trigger Pill Indicator */}
-      <div className="absolute bottom-2.5 right-2.5 z-30 flex items-center gap-1.5 rounded-full bg-[#08090a]/90 px-2 py-0.5 border border-slate-700/80 text-[10px] font-mono text-slate-400 backdrop-blur-md">
-        <span className="w-1.5 h-1.5 rounded-full bg-cyber-cyan animate-pulse" />
-        <span>{isRevealed ? 'VIEW: LIVE_STREAM' : 'HOVER: DISSOLVE'}</span>
+      <div className="absolute bottom-3 right-3 z-30 flex items-center gap-1.5 rounded-full bg-black/90 px-2.5 py-1 border border-white/10 text-[10px] font-mono text-zinc-400 backdrop-blur-md">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#ff640a] animate-pulse" />
+        <span>{isRevealed ? 'DISPATCH: MPV_ACTIVE' : 'HOVER: REVEAL_PLAYBACK'}</span>
       </div>
     </div>
   );

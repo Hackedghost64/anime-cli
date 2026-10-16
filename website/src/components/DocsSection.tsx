@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Keyboard, Layers, FileJson, Search, ExternalLink, Terminal, ChevronRight } from 'lucide-react';
-import { TechText } from './TechText';
+import { Keyboard, Layers, Search } from 'lucide-react';
 import { BranchedMenu } from './BranchedMenu';
 
 interface Shortcut {
@@ -42,45 +41,50 @@ export const DocsSection: React.FC = () => {
   });
 
   return (
-    <section id="docs" className="py-20 border-t border-slate-800/80 bg-[#090b0f] relative font-mono">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <section id="docs" className="py-24 border-t border-white/10 bg-black text-white font-mono">
+      <div className="mx-auto max-w-6xl px-6">
         
         {/* Header */}
-        <div className="max-w-3xl mb-12 space-y-3">
-          <TechText tag="DOCUMENTATION_MATRIX" glowColor="cyan" className="text-2xl sm:text-4xl font-bold font-sans">
-            Documentation & Shortcuts: <br />
-            <span className="text-white">Player Controls, Configuration & System Manual.</span>
-          </TechText>
-          <p className="text-slate-400 text-sm leading-relaxed">
-            Quick reference for keyboard shortcuts in both native MPV hardware mode and the Obsidian Web PWA player, along with the branched ecosystem navigation tree.
+        <div className="max-w-3xl mb-12 space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-zinc-950 text-xs text-zinc-400 uppercase tracking-widest">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#ff640a]" />
+            <span>Chapter 07 // System Reference & Shortcuts</span>
+          </div>
+
+          <h2 className="text-3xl sm:text-5xl font-black font-sans tracking-tight text-white leading-tight">
+            Controls & System Manual.
+          </h2>
+
+          <p className="text-zinc-400 text-sm sm:text-base font-light font-sans leading-relaxed">
+            Quick reference for keyboard shortcuts in both native MPV hardware mode and the Obsidian Web player, along with the branched ecosystem navigation tree.
           </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
           {/* Left Column: BranchedMenu Tree Navigation */}
-          <div className="lg:col-span-5 rounded-2xl border border-slate-800 bg-[#0c1017] p-6 shadow-cyber-card">
-            <h4 className="text-xs font-bold text-cyber-cyan uppercase tracking-wider mb-4 flex items-center gap-2">
-              <Layers className="h-4 w-4" />
-              SYSTEM MAP & TOPIC TREE
+          <div className="lg:col-span-5 rounded-2xl border border-white/10 bg-zinc-950 p-6">
+            <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+              <Layers className="h-4 w-4 text-[#ff640a]" />
+              System Map & Topic Tree
             </h4>
             <BranchedMenu />
           </div>
 
           {/* Right Column: Interactive Keyboard Shortcuts Table */}
-          <div id="shortcuts" className="lg:col-span-7 rounded-2xl border border-slate-800 bg-[#0c1017] p-6 shadow-cyber-card space-y-6">
+          <div id="shortcuts" className="lg:col-span-7 rounded-2xl border border-white/10 bg-zinc-950 p-6 space-y-6">
             
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
               <div>
-                <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Keyboard className="h-4 w-4 text-cyber-green" />
-                  PLAYER KEYBOARD SHORTCUTS
+                <h4 className="text-sm font-bold text-white flex items-center gap-2 font-sans">
+                  <Keyboard className="h-4 w-4 text-[#ff640a]" />
+                  Player Keyboard Shortcuts
                 </h4>
-                <p className="text-[11px] text-slate-400 mt-0.5">Control MPV and Web PWA without touching a mouse</p>
+                <p className="text-[11px] text-zinc-500 font-sans mt-0.5">Control MPV and Web PWA without touching a mouse</p>
               </div>
 
               {/* Scope filter pills */}
-              <div className="flex items-center gap-1 rounded-lg border border-slate-800 bg-[#08090a] p-1 text-[11px]">
+              <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-black p-1 text-[11px]">
                 {(['all', 'mpv', 'web'] as const).map((scope) => (
                   <button
                     key={scope}
@@ -88,8 +92,8 @@ export const DocsSection: React.FC = () => {
                     onClick={() => setFilterScope(scope)}
                     className={`rounded px-2.5 py-0.5 uppercase transition-all ${
                       filterScope === scope
-                        ? 'bg-slate-800 text-white font-bold'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-[#ff640a] text-black font-bold'
+                        : 'text-zinc-400 hover:text-white'
                     }`}
                   >
                     {scope === 'all' ? 'All' : scope.toUpperCase()}
@@ -100,13 +104,13 @@ export const DocsSection: React.FC = () => {
 
             {/* Search Input Bar */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Filter shortcuts by key or action (e.g. seek, volume, dub)..."
-                className="w-full rounded-lg border border-slate-800 bg-[#07090c] pl-9 pr-4 py-2 text-xs text-white placeholder-slate-600 focus:border-cyber-cyan focus:outline-none transition-colors"
+                className="w-full rounded-xl border border-white/10 bg-black pl-10 pr-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:border-[#ff640a] focus:outline-none transition-colors"
               />
             </div>
 
@@ -115,18 +119,18 @@ export const DocsSection: React.FC = () => {
               {filteredShortcuts.map((sc, i) => (
                 <div
                   key={i}
-                  className="flex items-center justify-between rounded-lg border border-slate-800/80 bg-[#08090a] px-3.5 py-2 text-xs hover:border-slate-700 transition-colors"
+                  className="flex items-center justify-between rounded-xl border border-white/5 bg-black px-4 py-2.5 text-xs hover:border-white/15 transition-colors"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span className="rounded bg-slate-800 px-2 py-0.5 text-cyber-cyan font-bold border border-slate-700/80 text-[11px]">
+                  <div className="flex items-center gap-3">
+                    <span className="rounded-lg bg-zinc-900 px-2 py-0.5 text-white font-bold border border-white/10 text-[11px]">
                       {sc.key}
                     </span>
-                    <span className="text-slate-300">{sc.action}</span>
+                    <span className="text-zinc-300 font-sans text-xs">{sc.action}</span>
                   </div>
-                  <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase ${
+                  <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase border ${
                     sc.scope === 'mpv'
-                      ? 'bg-cyber-cyan/10 text-cyber-cyan border border-cyber-cyan/30'
-                      : 'bg-cyber-purple/10 text-cyber-purple border border-cyber-purple/30'
+                      ? 'border-[#ff640a]/30 bg-[#ff640a]/10 text-[#ff640a]'
+                      : 'border-white/10 bg-zinc-900 text-zinc-400'
                   }`}>
                     {sc.scope}
                   </span>
@@ -135,10 +139,10 @@ export const DocsSection: React.FC = () => {
             </div>
 
             {/* Bottom Tip */}
-            <div className="rounded-lg bg-slate-900/60 p-3 text-[11px] text-slate-400 border border-slate-800 flex items-start gap-2">
-              <span className="text-cyber-cyan font-bold">PRO-TIP:</span>
-              <span>
-                Pressing <kbd className="text-white font-bold bg-slate-800 px-1 rounded">q</kbd> in MPV automatically commits playback timestamps to <code>~/.local/share/anime-cli/history.json</code>, allowing instant resume via <code>anime-lite -c</code>.
+            <div className="rounded-xl bg-black p-3.5 text-[11px] text-zinc-400 border border-white/5 flex items-start gap-2.5">
+              <span className="text-[#ff640a] font-bold">NOTE:</span>
+              <span className="font-sans leading-relaxed">
+                Pressing <kbd className="text-white font-bold font-mono bg-zinc-800 px-1 rounded">q</kbd> in MPV automatically saves playback timestamps to <code>~/.local/share/anime-cli/history.json</code>, enabling instant resume via <code>anime-lite -c</code>.
               </span>
             </div>
 

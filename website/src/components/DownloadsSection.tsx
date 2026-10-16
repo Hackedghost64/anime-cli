@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Smartphone, Cpu, Terminal, Package, ExternalLink, Check, Copy, ShieldCheck } from 'lucide-react';
-import { TechText } from './TechText';
-import { CallChip } from './CallChip';
+import { Download, Smartphone, Cpu, Package, Check, Copy, Terminal } from 'lucide-react';
 
 interface ReleaseCard {
   title: string;
@@ -24,7 +22,7 @@ const RELEASES: ReleaseCard[] = [
     filename: 'ShinseiAnime-Release.apk',
     downloadUrl: 'https://github.com/Hackedghost64/anime-cli/releases/latest/download/ShinseiAnime-Release.apk',
     command: 'adb install -r ShinseiAnime-Release.apk',
-    features: ['100% Standalone (No PC needed)', 'Jetpack Compose Touch Gestures', '18+ Safe Filter', 'Kyoto 1080p Mobile HLS'],
+    features: ['100% Standalone (No PC required)', 'Jetpack Compose Touch Gestures', '18+ Safe Filtering', 'Kyoto 1080p Mobile HLS'],
     recommended: true,
   },
   {
@@ -46,7 +44,7 @@ const RELEASES: ReleaseCard[] = [
     filename: 'anime-lite-linux-aarch64',
     downloadUrl: 'https://github.com/Hackedghost64/anime-cli/releases/latest/download/anime-lite-linux-aarch64',
     command: 'chmod +x anime-lite-linux-aarch64 && mv anime-lite-linux-aarch64 ~/.local/bin/anime-lite',
-    features: ['Raspberry Pi & ARM Laptops', 'Termux on Android', 'Ultra-Lean 4MB RAM', 'Direct Kyoto Streams'],
+    features: ['Raspberry Pi & ARM Laptops', 'Termux on Android Support', 'Ultra-Lean 4.1MB RAM', 'Direct Kyoto Streams'],
   },
   {
     title: 'anime-cli Python Hub Package',
@@ -56,17 +54,12 @@ const RELEASES: ReleaseCard[] = [
     filename: 'anime-cli-sdist.tar.gz',
     downloadUrl: 'https://github.com/Hackedghost64/anime-cli/releases',
     command: 'pip install --user anime-cli',
-    features: ['AniSkip Automated Lua', 'Binge Roulette (-B)', 'Live Airing Radar (--today)', 'Batch Downloader (-o)'],
+    features: ['AniSkip Automated MPV Lua', 'Binge Roulette (-B)', 'Live Airing Radar (--today)', 'Batch Downloader (-o)'],
   },
 ];
 
 export const DownloadsSection: React.FC = () => {
-  const [selectedOS, setSelectedOS] = useState<'all' | 'android' | 'linux' | 'python'>('all');
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
-
-  const filteredReleases = selectedOS === 'all'
-    ? RELEASES
-    : RELEASES.filter((r) => r.category === selectedOS);
 
   const handleCopy = (cmd: string) => {
     navigator.clipboard.writeText(cmd);
@@ -74,71 +67,96 @@ export const DownloadsSection: React.FC = () => {
     setTimeout(() => setCopiedCmd(null), 1800);
   };
 
+  const unixInstall = 'curl -fsSL https://raw.githubusercontent.com/Hackedghost64/anime-cli/main/install.sh | bash';
+  const winInstall = 'irm https://raw.githubusercontent.com/Hackedghost64/anime-cli/main/install-windows.ps1 | iex';
+
   return (
-    <section id="downloads" className="py-20 border-t border-slate-800/80 bg-[#08090a] relative font-mono">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <section id="downloads" className="py-24 border-t border-white/10 bg-black text-white font-mono">
+      <div className="mx-auto max-w-6xl px-6">
         
         {/* Header */}
-        <div className="max-w-3xl mb-12 space-y-3">
-          <TechText tag="RELEASE_VAULT::v1.2" glowColor="purple" className="text-2xl sm:text-4xl font-bold font-sans">
-            Downloads & Releases: <br />
-            <span className="text-white">Precompiled Standalone Binaries & Install Scripts.</span>
-          </TechText>
-          <p className="text-slate-400 text-sm leading-relaxed">
-            Grab official prebuilt artifacts directly from GitHub Releases or run the 1-click universal shell installer for your operating system.
+        <div className="max-w-3xl mb-12 space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-zinc-950 text-xs text-zinc-400 uppercase tracking-widest">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#ff640a]" />
+            <span>Chapter 06 // Install & Precompiled Releases</span>
+          </div>
+
+          <h2 className="text-3xl sm:text-5xl font-black font-sans tracking-tight text-white leading-tight">
+            Downloads & Binaries.
+          </h2>
+
+          <p className="text-zinc-400 text-sm sm:text-base font-light font-sans leading-relaxed">
+            Grab official precompiled artifacts directly from GitHub Releases or run the 1-click shell installer.
           </p>
         </div>
 
         {/* 1-Click Install Command Strip */}
-        <div className="rounded-xl border border-cyber-cyan/40 bg-[#0c111a] p-6 mb-12 space-y-4 shadow-glow-cyan">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="rounded-2xl border border-white/10 bg-zinc-950 p-6 sm:p-8 mb-12 space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
             <div>
-              <span className="text-xs font-bold text-cyber-cyan tracking-wider flex items-center gap-1.5">
-                <Terminal className="h-4 w-4" />
-                UNIVERSAL 1-CLICK SHELL INSTALL (RECOMMENDED)
+              <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <Terminal className="h-4 w-4 text-[#ff640a]" />
+                Universal 1-Click Shell Install (Recommended)
               </span>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Automatically installs dependencies, compiles C binary, sets up symlinks, and configures MPV AniSkip.
+              <p className="text-xs text-zinc-500 font-sans mt-0.5">
+                Automatically resolves dependencies, builds the C engine, creates symlinks, and sets up MPV.
               </p>
             </div>
-            <span className="text-[10px] rounded bg-cyber-green/10 text-cyber-green border border-cyber-green/30 px-2 py-0.5 whitespace-nowrap">
-              ALL PLATFORMS
+            <span className="text-[10px] rounded border border-white/15 bg-black text-zinc-400 px-2 py-0.5">
+              CROSS-PLATFORM
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-            <div className="space-y-1">
-              <span className="text-[11px] text-slate-400">Linux, macOS & Android (Termux):</span>
-              <CallChip
-                command="curl -fsSL https://raw.githubusercontent.com/Hackedghost64/anime-cli/main/install.sh | bash"
-                endpoint="install.sh"
-                durationMs={450}
-              />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl bg-black border border-white/5 space-y-2">
+              <div className="flex items-center justify-between text-xs text-zinc-400">
+                <span>Linux, macOS & Termux:</span>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(unixInstall)}
+                  className="flex items-center gap-1 text-[11px] text-[#ff640a] hover:underline"
+                >
+                  {copiedCmd === unixInstall ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedCmd === unixInstall ? 'Copied' : 'Copy'}</span>
+                </button>
+              </div>
+              <div className="text-[11px] text-zinc-300 font-mono break-all select-all">
+                {unixInstall}
+              </div>
             </div>
-            <div className="space-y-1">
-              <span className="text-[11px] text-slate-400">Windows (PowerShell):</span>
-              <CallChip
-                command="irm https://raw.githubusercontent.com/Hackedghost64/anime-cli/main/install-windows.ps1 | iex"
-                endpoint="install.ps1"
-                durationMs={520}
-              />
+
+            <div className="p-4 rounded-xl bg-black border border-white/5 space-y-2">
+              <div className="flex items-center justify-between text-xs text-zinc-400">
+                <span>Windows (PowerShell):</span>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(winInstall)}
+                  className="flex items-center gap-1 text-[11px] text-[#ff640a] hover:underline"
+                >
+                  {copiedCmd === winInstall ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedCmd === winInstall ? 'Copied' : 'Copy'}</span>
+                </button>
+              </div>
+              <div className="text-[11px] text-zinc-300 font-mono break-all select-all">
+                {winInstall}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Release Artifact Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {filteredReleases.map((card) => (
+          {RELEASES.map((card) => (
             <div
               key={card.filename}
-              className={`rounded-xl border bg-[#0a0d13] p-6 space-y-4 transition-all relative overflow-hidden ${
+              className={`rounded-2xl border bg-zinc-950 p-6 sm:p-7 space-y-5 transition-all relative overflow-hidden ${
                 card.recommended
-                  ? 'border-cyber-cyan/40 shadow-cyber-card'
-                  : 'border-slate-800 hover:border-slate-700'
+                  ? 'border-[#ff640a]/50'
+                  : 'border-white/10 hover:border-white/20'
               }`}
             >
               {card.recommended && (
-                <div className="absolute top-0 right-0 bg-cyber-cyan text-slate-950 font-bold text-[9px] px-3 py-0.5 rounded-bl tracking-wider">
+                <div className="absolute top-0 right-0 bg-[#ff640a] text-black font-bold text-[9px] px-3 py-0.5 rounded-bl tracking-wider">
                   OFFICIAL BUILD
                 </div>
               )}
@@ -146,26 +164,26 @@ export const DownloadsSection: React.FC = () => {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h4 className="text-base font-bold text-white font-sans flex items-center gap-2">
-                    {card.category === 'android' && <Smartphone className="h-4 w-4 text-cyber-purple" />}
-                    {card.category === 'linux' && <Cpu className="h-4 w-4 text-cyber-cyan" />}
-                    {card.category === 'python' && <Package className="h-4 w-4 text-cyber-green" />}
+                    {card.category === 'android' && <Smartphone className="h-4 w-4 text-[#ff640a]" />}
+                    {card.category === 'linux' && <Cpu className="h-4 w-4 text-[#ff640a]" />}
+                    {card.category === 'python' && <Package className="h-4 w-4 text-[#ff640a]" />}
                     {card.title}
                   </h4>
-                  <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-400">
-                    <span className="font-semibold text-cyber-cyan">{card.version}</span>
+                  <div className="flex items-center gap-2 mt-1 text-[11px] text-zinc-400">
+                    <span className="font-semibold text-white">{card.version}</span>
                     <span>•</span>
                     <span>{card.size}</span>
                     <span>•</span>
-                    <span className="text-slate-500">{card.filename}</span>
+                    <span className="text-zinc-500">{card.filename}</span>
                   </div>
                 </div>
               </div>
 
               {/* Feature Pills */}
-              <div className="grid grid-cols-2 gap-1.5 text-[11px] text-slate-300">
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-zinc-300 font-sans">
                 {card.features.map((feat, i) => (
                   <div key={i} className="flex items-center gap-1.5">
-                    <Check className="h-3 w-3 text-cyber-green shrink-0" />
+                    <Check className="h-3 w-3 text-[#ff640a] shrink-0" />
                     <span className="truncate">{feat}</span>
                   </div>
                 ))}
@@ -173,16 +191,16 @@ export const DownloadsSection: React.FC = () => {
 
               {/* CLI Command */}
               {card.command && (
-                <div className="rounded bg-black/60 p-2.5 text-[11px] text-slate-400 border border-slate-800/80 flex items-center justify-between gap-2">
-                  <code className="text-cyber-cyan truncate">{card.command}</code>
+                <div className="rounded-xl bg-black p-3 text-[11px] text-zinc-400 border border-white/5 flex items-center justify-between gap-2">
+                  <code className="text-zinc-300 truncate">{card.command}</code>
                   <button
                     type="button"
                     onClick={() => handleCopy(card.command!)}
-                    className="p-1 text-slate-400 hover:text-white shrink-0"
+                    className="p-1 text-zinc-500 hover:text-white shrink-0"
                     title="Copy command"
                   >
                     {copiedCmd === card.command ? (
-                      <Check className="h-3.5 w-3.5 text-cyber-green" />
+                      <Check className="h-3.5 w-3.5 text-[#ff640a]" />
                     ) : (
                       <Copy className="h-3.5 w-3.5" />
                     )}
@@ -195,10 +213,9 @@ export const DownloadsSection: React.FC = () => {
                 href={card.downloadUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 rounded-lg bg-slate-900 border border-slate-700/80 px-4 py-2.5 text-xs font-semibold text-white hover:border-cyber-cyan hover:bg-slate-800 transition-all cursor-target"
-                data-target-label="DOWNLOAD_ARTIFACT"
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-black border border-white/15 px-4 py-3 text-xs font-semibold text-white hover:border-[#ff640a] hover:text-[#ff640a] transition-all"
               >
-                <Download className="h-4 w-4 text-cyber-cyan" />
+                <Download className="h-4 w-4 text-[#ff640a]" />
                 <span>Download {card.filename}</span>
               </a>
             </div>

@@ -1,139 +1,147 @@
 import React from 'react';
-import { ShieldAlert, ShieldCheck, Bug, Zap, Globe, Lock, RefreshCw, Terminal, CheckCircle2, XCircle } from 'lucide-react';
-import { TechText } from './TechText';
-import { DecryptedText } from './DecryptedText';
+import { ShieldAlert, ShieldCheck, Zap, XCircle, CheckCircle2 } from 'lucide-react';
 import { PixelTransition } from './PixelTransition';
 
 export const StorySection: React.FC = () => {
   return (
-    <section id="story" className="py-20 border-t border-slate-800/80 bg-[#08090a] relative">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <section id="story" className="py-24 border-t border-white/10 bg-black relative text-white font-mono">
+      <div className="mx-auto max-w-6xl px-6">
         
         {/* Section Header */}
-        <div className="max-w-3xl mb-14 space-y-3">
-          <TechText tag="ORIGIN_STORY" glowColor="purple" className="text-2xl sm:text-4xl font-bold font-sans">
-            Why We Built This: <br />
-            <span className="text-white">The Death of Fragile HTML Web Scrapers.</span>
-          </TechText>
-          <p className="text-slate-400 font-mono text-sm leading-relaxed">
-            Tools like <code className="text-cyber-orange">ani-cli</code> popularized anime in the terminal, but their architecture was fundamentally doomed. 
-            Scraping browser web pages with <code className="text-slate-300">curl</code>, <code className="text-slate-300">grep</code>, and <code className="text-slate-300">sed</code> breaks continuously whenever pirate sites rotate DOM classes, shuffle iframes, or enable Cloudflare Turnstile captchas.
+        <div className="max-w-3xl mb-16 space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-zinc-950 text-xs text-zinc-400 uppercase tracking-widest">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#ff640a]" />
+            <span>Chapter 01 // The Problem</span>
+          </div>
+
+          <h2 className="text-3xl sm:text-5xl font-black font-sans tracking-tight text-white leading-tight">
+            The Web Scraper Graveyard. <br />
+            <span className="text-[#ff640a]">Why We Rebuilt the Stack.</span>
+          </h2>
+
+          <p className="text-zinc-400 text-sm sm:text-base font-light font-sans leading-relaxed">
+            Tools like <code className="text-[#ff640a] font-mono">ani-cli</code> introduced streaming anime in the terminal.
+            However, relying on parsing HTML web pages with <code className="text-zinc-300 font-mono">curl</code>, <code className="text-zinc-300 font-mono">grep</code>, and <code className="text-zinc-300 font-mono">sed</code> is inherently brittle.
+            When pirate websites shuffle DOM classes, rotate iframe keys, or deploy Cloudflare Turnstile, scraping scripts break without warning.
           </p>
         </div>
 
-        {/* Comparison Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+        {/* Side-by-Side Comparison */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16">
           
-          {/* Old Scrapers Card */}
-          <div className="rounded-xl border border-red-900/40 bg-[#0f1115]/90 p-6 space-y-5 relative overflow-hidden font-mono">
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-red-500/60" />
-            
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5 text-red-400">
-                <ShieldAlert className="h-5 w-5" />
-                <span className="text-sm font-bold tracking-wider">THE OLD WAY: HTML SCRAPING</span>
+          {/* Old Way */}
+          <div className="rounded-2xl border border-white/10 bg-zinc-950/70 p-8 space-y-6">
+            <div className="flex items-center justify-between border-b border-white/5 pb-4">
+              <div className="flex items-center gap-2 text-zinc-400">
+                <ShieldAlert className="h-4 w-4 text-zinc-500" />
+                <span className="text-xs font-bold tracking-wider uppercase text-zinc-300">The Old Way: HTML Scraping</span>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-red-950/60 text-red-400 border border-red-800/60">
-                FRAGILE & SLOW
+              <span className="text-[10px] px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900 text-zinc-400">
+                Fragile & Slow
               </span>
             </div>
 
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Traditional tools spawn dozens of subshells to parse heavy HTML pages designed for browsers. When anti-bot protections trigger, users get empty lists, 403 Forbidden, or broken English Dub tracks.
+            <p className="text-xs text-zinc-400 font-sans leading-relaxed">
+              Traditional tools spawn cascading subshells to fetch 150KB web pages meant for desktop browsers. Anti-bot checks immediately halt execution.
             </p>
 
-            <ul className="space-y-2.5 text-xs">
-              <li className="flex items-start gap-2 text-slate-300">
-                <XCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
-                <span><strong>Cloudflare Turnstile Blocks:</strong> Captchas render headless bash scrapers instantly dead.</span>
+            <ul className="space-y-3 text-xs font-sans">
+              <li className="flex items-start gap-2.5 text-zinc-400">
+                <XCircle className="h-4 w-4 text-zinc-600 shrink-0 mt-0.5" />
+                <span><strong className="text-zinc-200">Cloudflare Turnstile Blocks:</strong> Captchas render headless bash scripts dead on arrival.</span>
               </li>
-              <li className="flex items-start gap-2 text-slate-300">
-                <XCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
-                <span><strong>Broken English Dubs:</strong> Audio selector regex breaks whenever stream providers swap mirror keys.</span>
+              <li className="flex items-start gap-2.5 text-zinc-400">
+                <XCircle className="h-4 w-4 text-zinc-600 shrink-0 mt-0.5" />
+                <span><strong className="text-zinc-200">Broken Audio Tracks:</strong> Regex audio extraction fails when mirrors change keys.</span>
               </li>
-              <li className="flex items-start gap-2 text-slate-300">
-                <XCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
-                <span><strong>Multi-Second Hop Overhead:</strong> Requires 4 to 8 sequential web page downloads before MPV can even spawn.</span>
+              <li className="flex items-start gap-2.5 text-zinc-400">
+                <XCircle className="h-4 w-4 text-zinc-600 shrink-0 mt-0.5" />
+                <span><strong className="text-zinc-200">Multi-Second Overhead:</strong> 4 to 8 sequential page hops before video playback starts.</span>
               </li>
-              <li className="flex items-start gap-2 text-slate-300">
-                <XCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
-                <span><strong>Tedious Manual Scrubbing:</strong> Zero automated intro/outro detection forces constant keyboard tapping.</span>
+              <li className="flex items-start gap-2.5 text-zinc-400">
+                <XCircle className="h-4 w-4 text-zinc-600 shrink-0 mt-0.5" />
+                <span><strong className="text-zinc-200">Manual Scrubbing:</strong> Zero automated intro/outro detection forces manual seeking.</span>
               </li>
             </ul>
 
-            <div className="rounded bg-black/60 p-3 text-[11px] text-red-400 border border-red-900/40">
-              <code>$ ani-cli "naruto"<br />&gt; Error: Cloudflare challenge page detected (HTTP 403)<br />&gt; Failed to parse iframe stream url from mirror #2</code>
+            <div className="rounded-xl bg-black p-4 text-[11px] font-mono text-zinc-500 border border-white/5">
+              <span className="text-zinc-400">$ ani-cli "chainsaw man"</span><br />
+              <span className="text-zinc-600">&gt; Error: Cloudflare challenge page detected (HTTP 403)</span><br />
+              <span className="text-zinc-600">&gt; Failed to parse iframe stream url from mirror #2</span>
             </div>
           </div>
 
-          {/* New Reverse-Engineered Mobile Card */}
-          <div className="rounded-xl border border-cyber-green/40 bg-[#0e141a]/90 p-6 space-y-5 relative overflow-hidden font-mono shadow-glow-green">
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-cyber-green" />
+          {/* Shinsei Mobile API Way */}
+          <div className="rounded-2xl border border-[#ff640a]/30 bg-zinc-950/80 p-8 space-y-6 relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#ff640a]" />
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5 text-cyber-green">
-                <ShieldCheck className="h-5 w-5" />
-                <span className="text-sm font-bold tracking-wider">THE SHINSEI WAY: MOBILE JSON APIS</span>
+            <div className="flex items-center justify-between border-b border-white/5 pb-4">
+              <div className="flex items-center gap-2 text-white">
+                <ShieldCheck className="h-4 w-4 text-[#ff640a]" />
+                <span className="text-xs font-bold tracking-wider uppercase text-white">The Shinsei Way: Mobile JSON APIs</span>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-cyber-green/10 text-cyber-green border border-cyber-green/30">
-                IMMUNE TO BOT BLOCKS
+              <span className="text-[10px] px-2 py-0.5 rounded border border-[#ff640a]/40 bg-[#ff640a]/10 text-[#ff640a]">
+                Immune to Bot Checks
               </span>
             </div>
 
-            <p className="text-xs text-slate-400 leading-relaxed">
-              We intercepted the native traffic of high-volume Android streaming apps (Anilab & Kyoto Player). Instead of parsing messy web pages, we communicate directly with high-speed JSON microservices using modern mobile TLS headers.
+            <p className="text-xs text-zinc-300 font-sans leading-relaxed">
+              We reverse-engineered high-volume native Android clients (Anilab & Kyoto Player). We communicate directly with private JSON microservices over HTTP/2 using authentic mobile headers.
             </p>
 
-            <ul className="space-y-2.5 text-xs">
-              <li className="flex items-start gap-2 text-slate-200">
-                <CheckCircle2 className="h-4 w-4 text-cyber-green shrink-0 mt-0.5" />
-                <span><strong>100% Cloudflare Immunity:</strong> Mobile app backends do not serve Turnstile or JavaScript browser challenges.</span>
+            <ul className="space-y-3 text-xs font-sans">
+              <li className="flex items-start gap-2.5 text-zinc-300">
+                <CheckCircle2 className="h-4 w-4 text-[#ff640a] shrink-0 mt-0.5" />
+                <span><strong className="text-white">100% Cloudflare Immunity:</strong> Mobile backend endpoints do not serve browser Turnstile challenges.</span>
               </li>
-              <li className="flex items-start gap-2 text-slate-200">
-                <CheckCircle2 className="h-4 w-4 text-cyber-green shrink-0 mt-0.5" />
-                <span><strong>Guaranteed 1080p Master HLS:</strong> Pristine adaptive bitrate Kyoto CDN feeds with Japanese Sub and English Dub.</span>
+              <li className="flex items-start gap-2.5 text-zinc-300">
+                <CheckCircle2 className="h-4 w-4 text-[#ff640a] shrink-0 mt-0.5" />
+                <span><strong className="text-white">Guaranteed 1080p Master HLS:</strong> Pristine adaptive bitrate Kyoto CDN feeds with dual audio.</span>
               </li>
-              <li className="flex items-start gap-2 text-slate-200">
-                <CheckCircle2 className="h-4 w-4 text-cyber-green shrink-0 mt-0.5" />
-                <span><strong>Sub-500ms Single-Hop Resolution:</strong> Direct REST query returns ready-to-play `.m3u8` manifests instantly.</span>
+              <li className="flex items-start gap-2.5 text-zinc-300">
+                <CheckCircle2 className="h-4 w-4 text-[#ff640a] shrink-0 mt-0.5" />
+                <span><strong className="text-white">Sub-500ms Single-Hop Resolution:</strong> Direct REST query returns ready-to-play manifests in one shot.</span>
               </li>
-              <li className="flex items-start gap-2 text-slate-200">
-                <CheckCircle2 className="h-4 w-4 text-cyber-green shrink-0 mt-0.5" />
-                <span><strong>Native AniSkip Integration:</strong> Automatic chapter bounds jump OP/ED cleanly without lifting a finger.</span>
+              <li className="flex items-start gap-2.5 text-zinc-300">
+                <CheckCircle2 className="h-4 w-4 text-[#ff640a] shrink-0 mt-0.5" />
+                <span><strong className="text-white">Native AniSkip Integration:</strong> Automatic chapter bounds jump OP/ED cleanly without touching keys.</span>
               </li>
             </ul>
 
-            <div className="rounded bg-black/60 p-3 text-[11px] text-cyber-green border border-cyber-green/30">
-              <code>$ anime-lite "chainsaw man" -e 1 -d<br />&gt; [Kyoto] Stream resolved: 1080p Master HLS (480ms)<br />&gt; [AniSkip] Intro: 01:28 - 02:58 [AUTO-SKIPPED] ▶ MPV Spawned</code>
+            <div className="rounded-xl bg-black p-4 text-[11px] font-mono text-zinc-300 border border-[#ff640a]/20">
+              <span className="text-white">$ anime-lite "chainsaw man" -e 1 -d</span><br />
+              <span className="text-[#ff640a]">&gt; [Kyoto] Stream resolved: 1080p Master HLS (480ms)</span><br />
+              <span className="text-zinc-400">&gt; [AniSkip] Intro: 01:28 - 02:58 [AUTO-SKIPPED] ▶ MPV Spawned</span>
             </div>
           </div>
 
         </div>
 
-        {/* Interactive PixelTransition Demonstration */}
-        <div className="rounded-2xl border border-slate-800 bg-[#0a0d13] p-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+        {/* Minimalist Interactive Dissolve */}
+        <div className="rounded-2xl border border-white/10 bg-zinc-950 p-6 sm:p-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-white/5">
             <div>
-              <h4 className="text-sm font-bold font-mono text-white flex items-center gap-2">
-                <Zap className="h-4 w-4 text-cyber-cyan" />
-                INTERACTIVE ARCHITECTURE DISSOLVE
+              <h4 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                <Zap className="h-3.5 w-3.5 text-[#ff640a]" />
+                Architecture Transition: Payload to Player
               </h4>
-              <p className="text-xs font-mono text-slate-400">
-                Hover or click over the terminal box below to trigger the pixel matrix transition between Raw Network JSON & Final Player Delivery.
+              <p className="text-xs text-zinc-500 mt-1 font-sans">
+                Hover over the viewport to dissolve from the raw reverse-engineered JSON response to zero-overhead hardware playback.
               </p>
             </div>
           </div>
 
           <PixelTransition
-            gridSize={10}
-            className="h-64 sm:h-56"
+            gridSize={12}
+            pixelColor="#ff640a"
+            className="h-64 sm:h-56 rounded-xl border border-white/5 bg-black"
             firstContent={
-              <div className="font-mono text-xs text-slate-300 space-y-2">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2 text-[11px] text-slate-500">
-                  <span>PAYLOAD: Kyoto Mobile REST v4 (Anilab Reverse-Engineered)</span>
-                  <span className="text-cyber-green">STATUS: 200 OK</span>
+              <div className="font-mono text-xs text-zinc-300 space-y-2 p-4">
+                <div className="flex items-center justify-between border-b border-white/5 pb-2 text-[11px] text-zinc-500">
+                  <span>PAYLOAD: Kyoto Mobile REST v4 (Reverse-Engineered Anilab)</span>
+                  <span className="text-[#ff640a]">STATUS: 200 OK</span>
                 </div>
-                <pre className="text-[11px] text-cyber-cyan leading-relaxed overflow-x-auto">
+                <pre className="text-[11px] text-zinc-300 leading-relaxed overflow-x-auto">
 {`{
   "status": 200,
   "sources": [
@@ -147,16 +155,15 @@ export const StorySection: React.FC = () => {
               </div>
             }
             secondContent={
-              <div className="font-mono text-xs text-white space-y-3 text-center sm:text-left">
-                <div className="inline-flex items-center gap-2 rounded bg-cyber-green/10 border border-cyber-green/40 px-2.5 py-1 text-cyber-green text-xs font-bold">
-                  <span>⚡ ZERO-LATENCY PLAYBACK GRABBED</span>
+              <div className="font-mono text-xs text-white space-y-3 p-4 flex flex-col justify-center h-full">
+                <div className="inline-flex items-center gap-2 rounded border border-[#ff640a]/40 bg-[#ff640a]/10 px-2.5 py-1 text-[#ff640a] text-xs font-bold w-fit">
+                  <span>⚡ ZERO-COPY GPU PLAYBACK</span>
                 </div>
                 <h5 className="text-base sm:text-lg font-bold text-white">
-                  Direct Player Execution (Hardware-Accelerated MPV)
+                  Direct Dispatch to MPV Hardware Pipeline
                 </h5>
-                <p className="text-xs text-slate-400 max-w-lg">
-                  Streams feed directly into MPV with custom referrers, custom mobile User-Agent, and hardware-accelerated shaders.
-                  No browser needed. 4MB RAM footprint. Zero ads.
+                <p className="text-xs text-zinc-400 font-sans max-w-xl leading-relaxed">
+                  Streams feed straight into MPV with custom mobile headers, hardware decoding (<code className="text-zinc-200">--hwdec=auto</code>), and instant seek. No browser overhead. 4.1MB RAM footprint. Zero ads.
                 </p>
               </div>
             }

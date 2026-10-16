@@ -1,51 +1,43 @@
 import React, { useState } from 'react';
-import { Terminal, Github, Star, Zap, Cpu, Menu, X, Play } from 'lucide-react';
-import { DecryptedText } from './DecryptedText';
+import { Github, Menu, X, Zap } from 'lucide-react';
 
-interface NavbarProps {
-  onReplayBootloader: () => void;
-}
-
-export const Navbar: React.FC<NavbarProps> = ({ onReplayBootloader }) => {
+export const Navbar: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navLinks = [
     { label: 'The Story', href: '#story' },
-    { label: 'The Trinity', href: '#trinity' },
+    { label: 'Architecture', href: '#trinity' },
+    { label: 'Pipeline', href: '#pipeline' },
     { label: 'Benchmarks', href: '#benchmarks' },
-    { label: 'Terminal Sim', href: '#terminal' },
-    { label: 'Downloads', href: '#downloads' },
-    { label: 'Docs', href: '#docs' },
+    { label: 'Terminal', href: '#terminal' },
+    { label: 'Install', href: '#downloads' },
   ];
 
   return (
-    <header className="sticky top-0 z-30 w-full border-b border-slate-800/80 bg-[#08090a]/85 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8 font-mono">
+    <header className="sticky top-0 z-40 w-full border-b border-white/10 bg-black/85 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 font-mono">
         {/* Brand */}
-        <a href="#" className="flex items-center gap-3 group cursor-target" data-target-label="SHINSEI_HOME">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#5f8bff]/10 border border-[#5f8bff]/40 text-cyber-cyan shadow-glow-cyan transition-transform group-hover:scale-105">
-            <Zap className="h-5 w-5 fill-cyber-cyan/20" />
+        <a href="#" className="flex items-center gap-3 group">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ff640a]/10 border border-[#ff640a]/40 text-[#ff640a]">
+            <Zap className="h-4 w-4 fill-[#ff640a]" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-base font-bold tracking-tight text-white group-hover:text-cyber-cyan transition-colors">
-                <DecryptedText text="anime-cli" speed={30} />
-              </span>
-              <span className="rounded bg-cyber-cyan/10 px-1.5 py-0.5 text-[10px] font-semibold text-cyber-cyan border border-cyber-cyan/30">
-                v1.2.0
-              </span>
-            </div>
-            <span className="text-[10px] text-slate-400 tracking-wider">C99 • PYTHON • ANDROID</span>
+          <div className="flex items-center gap-2">
+            <span className="text-base font-bold tracking-tight text-white group-hover:text-[#ff640a] transition-colors">
+              anime-cli
+            </span>
+            <span className="rounded bg-[#ff640a]/10 px-2 py-0.5 text-[10px] font-semibold text-[#ff640a] border border-[#ff640a]/30">
+              v1.2.0
+            </span>
           </div>
         </a>
 
         {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-6 text-xs text-slate-300">
+        <nav className="hidden md:flex items-center gap-8 text-xs text-zinc-400">
           {navLinks.map((link) => (
             <a
               key={link.label}
               href={link.href}
-              className="transition-colors hover:text-cyber-cyan py-1"
+              className="transition-colors hover:text-white py-1"
             >
               {link.label}
             </a>
@@ -53,87 +45,52 @@ export const Navbar: React.FC<NavbarProps> = ({ onReplayBootloader }) => {
         </nav>
 
         {/* Right Actions */}
-        <div className="hidden sm:flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onReplayBootloader}
-            title="Re-run BIOS Bootloader"
-            className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/60 px-2.5 py-1.5 text-xs text-slate-400 hover:text-white hover:border-slate-700 transition-colors"
-          >
-            <Cpu className="h-3.5 w-3.5 text-cyber-cyan" />
-            <span className="hidden lg:inline text-[11px]">BIOS</span>
-          </button>
-
+        <div className="hidden sm:flex items-center gap-4">
           <a
             href="https://github.com/Hackedghost64/anime-cli"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 rounded-lg border border-slate-700/80 bg-[#0e131b] px-3 py-1.5 text-xs text-white hover:border-cyber-cyan hover:shadow-glow-cyan transition-all cursor-target"
-            data-target-label="GITHUB_REPO"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg border border-white/15 bg-white/5 text-xs text-white hover:border-[#ff640a] hover:text-[#ff640a] transition-all"
           >
-            <Github className="h-4 w-4" />
-            <span className="font-semibold">Star</span>
-            <span className="flex items-center gap-1 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-amber-400">
-              <Star className="h-3 w-3 fill-amber-400" />
-              <span>v1.2</span>
-            </span>
-          </a>
-
-          <a
-            href="#install"
-            className="flex items-center gap-1.5 rounded-lg bg-cyber-cyan/20 border border-cyber-cyan/50 px-3.5 py-1.5 text-xs font-semibold text-cyber-cyan hover:bg-cyber-cyan hover:text-slate-950 transition-all cursor-target"
-            data-target-label="INSTALL_NOW"
-          >
-            <Terminal className="h-3.5 w-3.5" />
-            <span>Install</span>
+            <Github className="w-3.5 h-3.5" />
+            <span>Star on GitHub</span>
           </a>
         </div>
 
-        {/* Mobile menu toggle */}
-        <button
-          type="button"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden p-2 text-slate-400 hover:text-white"
-        >
-          {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
+        {/* Mobile Hamburger */}
+        <div className="flex md:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 text-zinc-400 hover:text-white"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
 
-      {/* Mobile Menu Dropdown */}
+      {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-b border-slate-800 bg-[#08090a] px-4 py-4 font-mono text-sm space-y-3">
+        <div className="md:hidden border-b border-white/10 bg-black px-6 py-4 space-y-3 font-mono text-sm">
           {navLinks.map((link) => (
             <a
               key={link.label}
               href={link.href}
               onClick={() => setMobileMenuOpen(false)}
-              className="block text-slate-300 hover:text-cyber-cyan py-1"
+              className="block text-zinc-400 hover:text-white py-1"
             >
               {link.label}
             </a>
           ))}
-          <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => {
-                setMobileMenuOpen(false);
-                onReplayBootloader();
-              }}
-              className="flex items-center gap-1.5 text-xs text-slate-400"
-            >
-              <Cpu className="h-4 w-4 text-cyber-cyan" />
-              Replay BIOS
-            </button>
-            <a
-              href="https://github.com/Hackedghost64/anime-cli"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-xs text-white"
-            >
-              <Github className="h-4 w-4" />
-              GitHub
-            </a>
-          </div>
+          <a
+            href="https://github.com/Hackedghost64/anime-cli"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-xs text-[#ff640a] pt-2"
+          >
+            <Github className="w-4 h-4" />
+            <span>GitHub Repository</span>
+          </a>
         </div>
       )}
     </header>
