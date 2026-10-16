@@ -2,7 +2,7 @@ CC ?= gcc
 CFLAGS ?= -std=c99 -Wall -Wextra -O2 -Iinclude -Isrc
 LDFLAGS ?= $(shell pkg-config --libs libcurl 2>/dev/null || echo "-lcurl")
 
-SRCS = src/cJSON.c src/http.c src/api.c src/ui.c src/player.c src/history.c
+SRCS = src/cJSON.c src/http.c src/config.c src/api.c src/ui.c src/player.c src/history.c
 OBJS = $(SRCS:.c=.o)
 TARGET = bin/anime-lite
 
@@ -25,8 +25,12 @@ test_http: bin src/http.o
 	$(CC) $(CFLAGS) tests/test_http.c src/http.o $(LDFLAGS) -o bin/test_http
 	./bin/test_http
 
-test_api: bin src/cJSON.o src/http.o src/api.o
-	$(CC) $(CFLAGS) tests/test_api.c src/cJSON.o src/http.o src/api.o $(LDFLAGS) -o bin/test_api
+test_config: bin src/cJSON.o src/config.o
+	$(CC) $(CFLAGS) tests/test_config.c src/cJSON.o src/config.o -o bin/test_config
+	./bin/test_config
+
+test_api: bin src/cJSON.o src/http.o src/config.o src/api.o
+	$(CC) $(CFLAGS) tests/test_api.c src/cJSON.o src/http.o src/config.o src/api.o $(LDFLAGS) -o bin/test_api
 	./bin/test_api
 
 test_ui: bin src/ui.o
@@ -43,9 +47,9 @@ test_history: bin src/cJSON.o src/history.o
 
 test: test_all
 
-test_all: test_cjson test_http test_api test_ui test_player test_history
+test_all: test_cjson test_http test_config test_api test_ui test_player test_history
 
 clean:
 	rm -rf bin src/*.o tests/*.o
 
-.PHONY: all clean test test_cjson test_http test_api test_ui test_player test_history test_all
+.PHONY: all clean test test_cjson test_http test_config test_api test_ui test_player test_history test_all

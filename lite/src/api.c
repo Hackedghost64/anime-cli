@@ -2,21 +2,43 @@
 #include "api.h"
 #include "http.h"
 #include "cJSON.h"
+#include "config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <regex.h>
 #include <ctype.h>
 
 static char g_servers_template[512] = "https://play.anidb.app/api/episode/%id%/servers";
 static char g_iframe_template[512] = "https://play.anidb.app/api/episode/%id%/iframe";
 
-static const char *KYOTO_HEADERS[] = {
-    "Referer: https://play.app/",
-    "X-Requested-With: PLAY",
-    "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-};
-static const int KYOTO_HEADER_COUNT = 3;
+static int get_anilab_headers(const char **out_hdrs, int max) {
+    const AppConfig *cfg = config_get();
+    int n = cfg->anilab_header_count < max ? cfg->anilab_header_count : max;
+    for (int i = 0; i < n; i++) {
+        out_hdrs[i] = cfg->anilab_headers[i];
+    }
+    return n;
+}
+
+static int get_kyoto_headers(const char **out_hdrs, int max) {
+    const AppConfig *cfg = config_get();
+    int n = cfg->kyoto_header_count < max ? cfg->kyoto_header_count : max;
+    for (int i = 0; i < n; i++) {
+        out_hdrs[i] = cfg->kyoto_headers[i];
+    }
+    return n;
+}
+
+static int get_stream_headers(const char **out_hdrs, int max) {
+    const AppConfig *cfg = config_get();
+    int n = cfg->stream_header_count < max ? cfg->stream_header_count : max;
+    for (int i = 0; i < n; i++) {
+        out_hdrs[i] = cfg->stream_headers[i];
+    }
+    return n;
+}
 
 static void str_replace_pattern(char *dest, size_t dest_size, const char *src, const char *pattern, const char *replacement) {
     const char *pos = strstr(src, pattern);
@@ -72,10 +94,13 @@ int api_search(const char *query, AnimeItem **out_items, int *out_count) {
     if (!enc_query) return -1;
 
     char url[512];
-    snprintf(url, sizeof(url), "https://anilab2.amdapi.click/api/search?query=%s&page=1", enc_query);
+    snprintf(url, sizeof(url), "%s/search?query=%s&page=1", config_get()->anilab_base_url, enc_query);
     free(enc_query);
 
-    HttpResponse res = http_get(url, NULL, 0);
+    const char *hdrs[16];
+    int hdr_count = get_anilab_headers(hdrs, 16);
+
+    HttpResponse res = http_get(url, hdrs, hdr_count);
     if (res.status_code != 200 || !res.data) {
         http_response_free(&res);
         return -1;
@@ -119,21 +144,21 @@ int api_search(const char *query, AnimeItem **out_items, int *out_count) {
 
         cJSON *name = cJSON_GetObjectItemCaseSensitive(item, "name");
         if (!name) name = cJSON_GetObjectItemCaseSensitive(item, "title");
-        if (name && cJSON_IsString(name) && name->valuestring && strlen(name->valuestring) > 0) {
+        if (name && cJSON_IsString(name) && name->valuestring) {
             strncpy(items[i].title, name->valuestring, sizeof(items[i].title) - 1);
         }
     }
 
     cJSON_Delete(root);
 
-    // Hydrate titles for top results if missing
+    // Hydrate top search results that lack title via /post?id=
     int hydrate_count = total < 8 ? total : 8;
     for (int i = 0; i < total; i++) {
         if (items[i].title[0] == '\0') {
             if (i < hydrate_count && items[i].id > 0) {
-                char post_url[256];
-                snprintf(post_url, sizeof(post_url), "https://anilab2.amdapi.click/api/post?id=%lld", items[i].id);
-                HttpResponse p_res = http_get(post_url, NULL, 0);
+                char post_url[512];
+                snprintf(post_url, sizeof(post_url), "%s/post?id=%lld", config_get()->anilab_base_url, items[i].id);
+                HttpResponse p_res = http_get(post_url, hdrs, hdr_count);
                 if (p_res.status_code == 200 && p_res.data) {
                     cJSON *p_root = cJSON_Parse(p_res.data);
                     if (p_root) {
@@ -163,10 +188,13 @@ int api_get_episodes(long long anime_id, EpisodeItem **out_episodes, int *out_co
     *out_episodes = NULL;
     *out_count = 0;
 
-    char kyoto_url[256];
-    snprintf(kyoto_url, sizeof(kyoto_url), "https://app.kyotoplayer.com/api/v4/post?id=%lld", anime_id);
+    char kyoto_url[512];
+    snprintf(kyoto_url, sizeof(kyoto_url), "%s/post?id=%lld", config_get()->kyoto_base_url, anime_id);
 
-    HttpResponse k_res = http_get(kyoto_url, NULL, 0);
+    const char *k_hdrs[16];
+    int k_hdr_count = get_kyoto_headers(k_hdrs, 16);
+
+    HttpResponse k_res = http_get(kyoto_url, k_hdrs, k_hdr_count);
     if (k_res.status_code != 200 || !k_res.data) {
         http_response_free(&k_res);
         return -1;
@@ -211,7 +239,10 @@ int api_get_episodes(long long anime_id, EpisodeItem **out_episodes, int *out_co
     char final_ep_url[512];
     format_endpoint_url(final_ep_url, sizeof(final_ep_url), ep_url_raw, anime_id_str);
 
-    HttpResponse ep_res = http_get(final_ep_url, KYOTO_HEADERS, KYOTO_HEADER_COUNT);
+    const char *st_hdrs[16];
+    int st_hdr_count = get_stream_headers(st_hdrs, 16);
+
+    HttpResponse ep_res = http_get(final_ep_url, st_hdrs, st_hdr_count);
     if (ep_res.status_code != 200 || !ep_res.data) {
         http_response_free(&ep_res);
         return -1;
@@ -248,24 +279,27 @@ int api_get_episodes(long long anime_id, EpisodeItem **out_episodes, int *out_co
             if (cJSON_IsString(id) && id->valuestring) {
                 strncpy(episodes[i].id, id->valuestring, sizeof(episodes[i].id) - 1);
             } else if (cJSON_IsNumber(id)) {
-                snprintf(episodes[i].id, sizeof(episodes[i].id), "%lld", (long long)id->valuedouble);
+                snprintf(episodes[i].id, sizeof(episodes[i].id), "%.0f", id->valuedouble);
             }
         }
 
-        cJSON *num = cJSON_GetObjectItemCaseSensitive(item, "number");
-        if (num) {
-            if (cJSON_IsString(num) && num->valuestring) {
-                strncpy(episodes[i].number, num->valuestring, sizeof(episodes[i].number) - 1);
-            } else if (cJSON_IsNumber(num)) {
-                snprintf(episodes[i].number, sizeof(episodes[i].number), "%g", num->valuedouble);
+        cJSON *number = cJSON_GetObjectItemCaseSensitive(item, "number");
+        if (number) {
+            if (cJSON_IsString(number) && number->valuestring) {
+                strncpy(episodes[i].number, number->valuestring, sizeof(episodes[i].number) - 1);
+            } else if (cJSON_IsNumber(number)) {
+                snprintf(episodes[i].number, sizeof(episodes[i].number), "%.0f", number->valuedouble);
             }
+        }
+        if (episodes[i].number[0] == '\0') {
+            snprintf(episodes[i].number, sizeof(episodes[i].number), "%d", i + 1);
         }
 
         cJSON *name = cJSON_GetObjectItemCaseSensitive(item, "name");
-        if (name && cJSON_IsString(name) && name->valuestring && strlen(name->valuestring) > 0) {
+        if (name && cJSON_IsString(name) && name->valuestring) {
             strncpy(episodes[i].name, name->valuestring, sizeof(episodes[i].name) - 1);
         } else {
-            snprintf(episodes[i].name, sizeof(episodes[i].name), "Episode %s", episodes[i].number[0] ? episodes[i].number : episodes[i].id);
+            snprintf(episodes[i].name, sizeof(episodes[i].name), "Episode %s", episodes[i].number);
         }
     }
 
@@ -280,10 +314,13 @@ int api_get_servers(const char *ep_id, ServerItem **out_servers, int *out_count)
     *out_servers = NULL;
     *out_count = 0;
 
-    char url[512];
-    format_endpoint_url(url, sizeof(url), g_servers_template, ep_id);
+    char servers_url[512];
+    format_endpoint_url(servers_url, sizeof(servers_url), g_servers_template, ep_id);
 
-    HttpResponse res = http_get(url, KYOTO_HEADERS, KYOTO_HEADER_COUNT);
+    const char *st_hdrs[16];
+    int st_hdr_count = get_stream_headers(st_hdrs, 16);
+
+    HttpResponse res = http_get(servers_url, st_hdrs, st_hdr_count);
     if (res.status_code != 200 || !res.data) {
         http_response_free(&res);
         return -1;
@@ -328,23 +365,28 @@ int api_get_servers(const char *ep_id, ServerItem **out_servers, int *out_count)
         }
 
         cJSON *lang = cJSON_GetObjectItemCaseSensitive(item, "lang");
+        char raw_lang[32] = {0};
         if (lang && cJSON_IsString(lang) && lang->valuestring) {
-            strncpy(servers[i].lang, lang->valuestring, sizeof(servers[i].lang) - 1);
-        } else {
-            strncpy(servers[i].lang, "sub", sizeof(servers[i].lang) - 1);
+            strncpy(raw_lang, lang->valuestring, sizeof(raw_lang) - 1);
         }
 
-        // Extract language code from server id (e.g. "70219/jpn" -> "jpn")
-        const char *slash = strrchr(servers[i].id, '/');
+        char *slash = strrchr(servers[i].id, '/');
         if (slash && *(slash + 1)) {
             strncpy(servers[i].lang_code, slash + 1, sizeof(servers[i].lang_code) - 1);
-        } else {
-            strncpy(servers[i].lang_code, servers[i].lang, sizeof(servers[i].lang_code) - 1);
+            for (size_t c = 0; c < strlen(servers[i].lang_code); c++) {
+                servers[i].lang_code[c] = tolower((unsigned char)servers[i].lang_code[c]);
+            }
         }
 
-        // Lowercase lang_code
-        for (char *p = servers[i].lang_code; *p; p++) *p = (char)tolower((unsigned char)*p);
+        int is_dub = 0;
+        if (strncasecmp(raw_lang, "dub", 3) == 0 ||
+            strcasecmp(servers[i].lang_code, "eng") == 0 ||
+            strcasecmp(servers[i].lang_code, "en") == 0 ||
+            strstr(servers[i].name, "DUB") != NULL) {
+            is_dub = 1;
+        }
 
+        strncpy(servers[i].lang, is_dub ? "dub" : "sub", sizeof(servers[i].lang) - 1);
         const char *flag = map_lang_flag(servers[i].lang_code);
         strncpy(servers[i].flag, flag, sizeof(servers[i].flag) - 1);
     }
@@ -362,7 +404,10 @@ int api_resolve_stream(const char *server_id, StreamResult *out_stream) {
     char iframe_url[512];
     format_endpoint_url(iframe_url, sizeof(iframe_url), g_iframe_template, server_id);
 
-    HttpResponse res = http_get(iframe_url, KYOTO_HEADERS, KYOTO_HEADER_COUNT);
+    const char *st_hdrs[16];
+    int st_hdr_count = get_stream_headers(st_hdrs, 16);
+
+    HttpResponse res = http_get(iframe_url, st_hdrs, st_hdr_count);
     if (res.status_code != 200 || !res.data) {
         http_response_free(&res);
         return -1;
@@ -434,12 +479,14 @@ int api_resolve_stream(const char *server_id, StreamResult *out_stream) {
     regfree(&regex);
     http_response_free(&html_res);
 
-    const char *best_url = master_match[0] ? master_match : first_match;
-    if (!best_url[0]) {
-        return -1; // No .m3u8 found
+    if (master_match[0]) {
+        snprintf(out_stream->url, sizeof(out_stream->url), "%s", master_match);
+    } else if (first_match[0]) {
+        snprintf(out_stream->url, sizeof(out_stream->url), "%s", first_match);
+    } else {
+        return -1;
     }
 
-    snprintf(out_stream->url, sizeof(out_stream->url), "%s", best_url);
     snprintf(out_stream->embed, sizeof(out_stream->embed), "%s", link);
     return 0;
 }

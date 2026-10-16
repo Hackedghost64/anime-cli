@@ -30,12 +30,9 @@ _patch_ipv4()
 
 class Settings:
     def __init__(self):
-        self.host = os.environ.get("HOST", "0.0.0.0")
-        self.port = int(os.environ.get("PORT", "8000"))
-        
-        # Anilab API
-        self.anilab_base_url = os.environ.get("ANILAB_BASE_URL", "https://anilab2.amdapi.click/api")
-        self.anilab_headers: Dict[str, str] = {
+        # 1. Base Defaults
+        default_anilab_url = "https://anilab2.amdapi.click/api"
+        default_anilab_headers: Dict[str, str] = {
             "Accept": "application/json",
             "Content-Type": "application/json",
             "os-version": "35",
@@ -44,10 +41,8 @@ class Settings:
             "os-id": "",
             "User-Agent": "okhttp/4.12.0"
         }
-        
-        # Kyoto API
-        self.kyoto_base_url = os.environ.get("KYOTO_BASE_URL", "https://app.kyotoplayer.com/api/v4")
-        self.kyoto_headers: Dict[str, str] = {
+        default_kyoto_url = "https://app.kyotoplayer.com/api/v4"
+        default_kyoto_headers: Dict[str, str] = {
             "Accept": "application/json",
             "Content-Type": "application/json",
             "os-version": "35",
@@ -55,6 +50,56 @@ class Settings:
             "app-version": "126",
             "User-Agent": "okhttp/4.12.0"
         }
+        default_stream_headers: Dict[str, str] = {
+            "Referer": "https://play.app/",
+            "X-Requested-With": "PLAY",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        default_host = "0.0.0.0"
+        default_port = 8000
+
+        # 2. Search for shared config.json
+        config_candidates = [
+            os.environ.get("ANIME_CLI_CONFIG"),
+            os.path.expanduser("~/.config/anime-cli/config.json"),
+            os.path.expanduser("~/.local/share/anime-cli/config.json"),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json"),
+            os.path.join(os.getcwd(), "config.json"),
+        ]
+        self.config_file = None
+        for candidate in config_candidates:
+            if candidate and os.path.isfile(candidate):
+                try:
+                    import json
+                    with open(candidate, "r", encoding="utf-8") as f:
+                        cfg_data = json.load(f)
+                    if isinstance(cfg_data, dict):
+                        self.config_file = candidate
+                        if "anilab" in cfg_data and isinstance(cfg_data["anilab"], dict):
+                            default_anilab_url = cfg_data["anilab"].get("base_url", default_anilab_url)
+                            if "headers" in cfg_data["anilab"]:
+                                default_anilab_headers.update(cfg_data["anilab"]["headers"])
+                        if "kyoto" in cfg_data and isinstance(cfg_data["kyoto"], dict):
+                            default_kyoto_url = cfg_data["kyoto"].get("base_url", default_kyoto_url)
+                            if "headers" in cfg_data["kyoto"]:
+                                default_kyoto_headers.update(cfg_data["kyoto"]["headers"])
+                            if "stream_headers" in cfg_data["kyoto"]:
+                                default_stream_headers.update(cfg_data["kyoto"]["stream_headers"])
+                        if "server" in cfg_data and isinstance(cfg_data["server"], dict):
+                            default_host = cfg_data["server"].get("host", default_host)
+                            default_port = int(cfg_data["server"].get("port", default_port))
+                        break
+                except Exception:
+                    pass
+
+        # 3. Environment overrides take precedence
+        self.host = os.environ.get("HOST", default_host)
+        self.port = int(os.environ.get("PORT", str(default_port)))
+        self.anilab_base_url = os.environ.get("ANILAB_BASE_URL", default_anilab_url)
+        self.anilab_headers = default_anilab_headers
+        self.kyoto_base_url = os.environ.get("KYOTO_BASE_URL", default_kyoto_url)
+        self.kyoto_headers = default_kyoto_headers
+        self.stream_headers = default_stream_headers
         
         # Database in standard user data dir (~/.local/share/anime-cli/anime.db)
         user_data_dir = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))

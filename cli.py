@@ -519,12 +519,33 @@ def cmd_init(port: int = 8088):
 # -----------------------------------------------------------------------------
 def cmd_build_apk(release: bool = False, install: bool = False):
     banner()
-    android_dir = os.path.join(BASE_DIR, "android")
-    gradlew_path = os.path.join(android_dir, "gradlew")
+    android_candidates = [
+        os.path.join(BASE_DIR, "android"),
+        os.path.join(os.getcwd(), "android"),
+    ]
+    # Check parent directories from cwd
+    cur = os.getcwd()
+    for _ in range(4):
+        cand = os.path.join(cur, "android")
+        if cand not in android_candidates:
+            android_candidates.append(cand)
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        cur = parent
 
-    if not os.path.isdir(android_dir) or not os.path.exists(gradlew_path):
-        print(f"{C_RED}Error: Android project directory not found at {android_dir}{C_RESET}")
+    android_dir = None
+    for cand in android_candidates:
+        if os.path.isdir(cand) and os.path.exists(os.path.join(cand, "gradlew")):
+            android_dir = cand
+            break
+
+    if not android_dir:
+        print(f"{C_RED}Error: Android project directory not found.{C_RESET}")
+        print(f"{C_YELLOW}Ensure you run this command inside the anime-cli repository containing the 'android/' folder.{C_RESET}")
         return
+
+    gradlew_path = os.path.join(android_dir, "gradlew")
 
     # Check Java
     if not shutil.which("java"):
