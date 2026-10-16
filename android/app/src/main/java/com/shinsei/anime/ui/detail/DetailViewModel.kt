@@ -190,6 +190,13 @@ class DetailViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 }
             }
+            val age = obj.optString("age", "")
+            val isAdult = obj.optBoolean("isAdult", false) ||
+                    genres.any { it.contains("Hentai", ignoreCase = true) || it.contains("Erotica", ignoreCase = true) } ||
+                    age.contains("18+", ignoreCase = true) ||
+                    age.equals("rx", ignoreCase = true) ||
+                    age.equals("r+", ignoreCase = true)
+
             AnimeDetail(
                 id = obj.optString("id", fallbackId),
                 title = obj.optString("title", "Anime $fallbackId"),
@@ -199,10 +206,11 @@ class DetailViewModel(application: Application) : AndroidViewModel(application) 
                 type = obj.optString("type", "TV"),
                 genres = genres,
                 malId = obj.optLong("mal_id", 0L),
-                seasons = seasons
+                seasons = seasons,
+                isAdult = isAdult
             )
         } catch (e: Exception) {
-            AnimeDetail(id = fallbackId, title = "Anime $fallbackId", poster = "")
+            AnimeDetail(id = fallbackId, title = "Anime $fallbackId", poster = "", isAdult = false)
         }
     }
 

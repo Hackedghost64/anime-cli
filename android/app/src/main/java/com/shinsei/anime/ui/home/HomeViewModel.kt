@@ -7,6 +7,9 @@ import com.shinsei.anime.ShinseiApp
 import com.shinsei.anime.data.local.WatchProgressEntity
 import com.shinsei.anime.data.model.AnimeCard
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -43,6 +46,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     private val cachePrefs = app.getSharedPreferences("home_feed_cache", android.content.Context.MODE_PRIVATE)
+    private val metaCache = app.getSharedPreferences("post_metadata_cache", android.content.Context.MODE_PRIVATE)
 
     init {
         // Offload disk cache read and JSON parsing to IO to avoid blocking main thread at startup
@@ -82,10 +86,93 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     rails = parsed.rails,
                     trending = parsed.trending
                 )
+                hydrateMissingTitles(parsed.rails, parsed.spotlightCards)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = if (!hasExistingData) (e.message ?: "Failed to load catalog") else null
+                )
+            }
+        }
+    }
+
+    private fun hydrateMissingTitles(rails: List<AnimeRail>, spotlightCards: List<AnimeCard>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val allCards = (spotlightCards + rails.flatMap { it.items }).distinctBy { it.id }
+            val needingTitle = allCards.filter {
+                it.title.isBlank() || it.title.equals("Anime", ignoreCase = true)
+            }.take(30)
+
+            if (needingTitle.isEmpty()) return@launch
+
+            var hasUpdates = false
+            coroutineScope {
+                val deferredList = needingTitle.map { card ->
+                    async {
+                        val cachedTitle = metaCache.getString("title_${card.id}", null)
+                        val cachedAdult = metaCache.getBoolean("adult_${card.id}", false)
+                        if (!cachedTitle.isNullOrEmpty()) {
+                            Pair(card.id, Pair(cachedTitle, cachedAdult))
+                        } else {
+                            try {
+                                val detailStr = scriptRunner.getDetails(card.id)
+                                if (detailStr.isNotEmpty()) {
+                                    val obj = JSONObject(detailStr)
+                                    val t = obj.optString("title", "")
+                                    val genres = obj.optString("genres", "") + " " + (obj.optJSONArray("genres")?.toString() ?: "")
+                                    val age = obj.optString("age", "")
+                                    val isAdult = obj.optBoolean("isAdult", false) ||
+                                            genres.contains("Hentai", ignoreCase = true) ||
+                                            genres.contains("Erotica", ignoreCase = true) ||
+                                            age.contains("18+", ignoreCase = true) ||
+                                            age.equals("rx", ignoreCase = true) ||
+                                            age.equals("r+", ignoreCase = true)
+                                    if (t.isNotEmpty() && !t.equals("Anime", ignoreCase = true)) {
+                                        metaCache.edit()
+                                            .putString("title_${card.id}", t)
+                                            .putBoolean("adult_${card.id}", isAdult)
+                                            .apply()
+                                        Pair(card.id, Pair(t, isAdult))
+                                    } else null
+                                } else null
+                            } catch (_: Exception) {
+                                null
+                            }
+                        }
+                    }
+                }
+                val results = deferredList.awaitAll().filterNotNull()
+                if (results.isNotEmpty()) {
+                    hasUpdates = true
+                }
+            }
+
+            if (hasUpdates) {
+                val updatedSpotlight = _uiState.value.spotlightCards.mapNotNull { card ->
+                    val isAdult = metaCache.getBoolean("adult_${card.id}", card.isAdult)
+                    if (isAdult) null
+                    else {
+                        val t = metaCache.getString("title_${card.id}", card.title) ?: card.title
+                        card.copy(title = if (t.isNotBlank() && !t.equals("Anime", ignoreCase = true)) t else card.title)
+                    }
+                }
+
+                val updatedRails = _uiState.value.rails.map { rail ->
+                    val updatedItems = rail.items.mapNotNull { card ->
+                        val isAdult = metaCache.getBoolean("adult_${card.id}", card.isAdult)
+                        if (isAdult) null
+                        else {
+                            val t = metaCache.getString("title_${card.id}", card.title) ?: card.title
+                            card.copy(title = if (t.isNotBlank() && !t.equals("Anime", ignoreCase = true)) t else card.title)
+                        }
+                    }
+                    rail.copy(items = updatedItems)
+                }.filter { it.items.isNotEmpty() }
+
+                _uiState.value = _uiState.value.copy(
+                    spotlightCards = updatedSpotlight,
+                    spotlight = updatedSpotlight.firstOrNull(),
+                    rails = updatedRails
                 )
             }
         }
@@ -155,16 +242,26 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 for (si in 0 until minOf(spotlightArr.length(), 15)) {
                     val obj = spotlightArr.getJSONObject(si)
                     val id = obj.optString("id", "")
-                    if (id.isNotEmpty()) {
+                    val isAdult = obj.optBoolean("isAdult", false) || metaCache.getBoolean("adult_$id", false)
+                    if (isAdult) continue
+
+                    var title = obj.optString("title", "")
+                    if (title.isBlank() || title.equals("Anime", ignoreCase = true)) {
+                        val cached = metaCache.getString("title_$id", "") ?: ""
+                        if (cached.isNotBlank()) title = cached
+                    }
+
+                    if (id.isNotEmpty() && title.isNotBlank() && !title.equals("Anime", ignoreCase = true)) {
                         val card = AnimeCard(
                             id = id,
-                            title = obj.optString("title", "Featured Anime"),
+                            title = title,
                             poster = obj.optString("poster", obj.optString("backdrop", "")),
                             score = obj.optString("score", ""),
-                            type = obj.optString("type", "TV")
+                            type = obj.optString("type", "TV"),
+                            isAdult = false
                         )
                         allSpotlightCards.add(card)
-                        if (si == 0) spotlightCard = card
+                        if (spotlightCard == null) spotlightCard = card
                     }
                 }
             }
@@ -180,7 +277,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     for (i in 0 until itemsArr.length()) {
                         val itemObj = itemsArr.getJSONObject(i)
                         val id = itemObj.optString("id", "")
-                        val title = itemObj.optString("title", "")
+                        val isAdult = itemObj.optBoolean("isAdult", false) || metaCache.getBoolean("adult_$id", false)
+                        if (isAdult) continue
+
+                        var title = itemObj.optString("title", "")
+                        if (title.isBlank() || title.equals("Anime", ignoreCase = true)) {
+                            val cached = metaCache.getString("title_$id", "") ?: ""
+                            if (cached.isNotBlank()) title = cached
+                        }
+
                         val poster = itemObj.optString("poster", "")
                         if (id.isNotEmpty() && (poster.isNotEmpty() || title.isNotEmpty())) {
                             railCards.add(AnimeCard(
@@ -188,7 +293,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                                 title = if (title.isNotEmpty()) title else "Anime",
                                 poster = poster,
                                 score = itemObj.optString("score", ""),
-                                type = itemObj.optString("type", "TV")
+                                type = itemObj.optString("type", "TV"),
+                                isAdult = false
                             ))
                         }
                     }
@@ -204,7 +310,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 for (i in 0 until itemsArr.length()) {
                     val obj = itemsArr.getJSONObject(i)
                     val id = obj.optString("id", "")
-                    val title = obj.optString("title", "")
+                    val isAdult = obj.optBoolean("isAdult", false) || metaCache.getBoolean("adult_$id", false)
+                    if (isAdult) continue
+
+                    var title = obj.optString("title", "")
+                    if (title.isBlank() || title.equals("Anime", ignoreCase = true)) {
+                        val cached = metaCache.getString("title_$id", "") ?: ""
+                        if (cached.isNotBlank()) title = cached
+                    }
                     val poster = obj.optString("poster", "")
                     if (id.isNotEmpty() && (poster.isNotEmpty() || title.isNotEmpty())) {
                         flatCards.add(AnimeCard(
@@ -212,7 +325,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                             title = if (title.isNotEmpty()) title else "Anime",
                             poster = poster,
                             score = obj.optString("score", ""),
-                            type = obj.optString("type", "TV")
+                            type = obj.optString("type", "TV"),
+                            isAdult = false
                         ))
                     }
                 }
@@ -275,17 +389,23 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
                 val id = obj.optString("id", "")
-                val title = obj.optString("title", "")
+                var title = obj.optString("title", "")
+                if (title.isBlank() || title.equals("Anime", ignoreCase = true)) {
+                    val cached = metaCache.getString("title_$id", "") ?: ""
+                    if (cached.isNotBlank()) title = cached
+                }
                 val poster = obj.optString("poster", "")
                 val score = obj.optString("score", "")
                 val type = obj.optString("type", "TV")
+                val isAdult = obj.optBoolean("isAdult", false) || metaCache.getBoolean("adult_$id", false)
                 if (id.isNotEmpty() && (title.isNotEmpty() || poster.isNotEmpty())) {
                     list.add(AnimeCard(
                         id = id,
                         title = if (title.isNotEmpty()) title else "Anime",
                         poster = poster,
                         score = score,
-                        type = type
+                        type = type,
+                        isAdult = isAdult
                     ))
                 }
             }

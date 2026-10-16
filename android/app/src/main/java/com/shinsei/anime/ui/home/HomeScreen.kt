@@ -91,6 +91,52 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val continueWatching by viewModel.continueWatching.collectAsState()
     val focusManager = LocalFocusManager.current
+    var adultWarningTarget by remember { mutableStateOf<AnimeCard?>(null) }
+
+    val handleAnimeClick: (AnimeCard) -> Unit = { card ->
+        if (card.isAdult) {
+            adultWarningTarget = card
+        } else {
+            onNavigateToDetail(card.id)
+        }
+    }
+
+    if (adultWarningTarget != null) {
+        val target = adultWarningTarget!!
+        AlertDialog(
+            onDismissRequest = { adultWarningTarget = null },
+            title = {
+                Text(
+                    text = "⚠️ 18+ Mature Content",
+                    color = CrunchyOrange,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Text(
+                    text = "This title (\"${target.title}\") contains mature / 18+ content.\n\nAre you 18 or older and wish to view this title?",
+                    color = TextPrimary,
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = target.id
+                    adultWarningTarget = null
+                    onNavigateToDetail(id)
+                }) {
+                    Text("Proceed (18+)", color = CrunchyOrange, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { adultWarningTarget = null }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+            containerColor = SurfaceDark
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -225,7 +271,7 @@ fun HomeScreen(
                 // Search Results Grid
                 SearchFeedGrid(
                     results = uiState.searchResults,
-                    onAnimeClick = onNavigateToDetail
+                    onAnimeClick = handleAnimeClick
                 )
             }
         } else {
@@ -236,7 +282,7 @@ fun HomeScreen(
                 spotlightCards = uiState.spotlightCards,
                 rails = uiState.rails,
                 trending = uiState.trending,
-                onAnimeClick = onNavigateToDetail,
+                onAnimeClick = handleAnimeClick,
                 onPlayProgress = onPlayProgress,
                 onDeleteSeries = { animeId -> viewModel.deleteSeriesProgress(animeId) }
             )
@@ -252,7 +298,7 @@ fun MainCatalogFeed(
     spotlightCards: List<AnimeCard>,
     rails: List<com.shinsei.anime.data.model.AnimeRail>,
     trending: List<AnimeCard>,
-    onAnimeClick: (String) -> Unit,
+    onAnimeClick: (AnimeCard) -> Unit,
     onPlayProgress: (WatchProgressEntity) -> Unit,
     onDeleteSeries: (String) -> Unit
 ) {
@@ -286,7 +332,7 @@ fun MainCatalogFeed(
                         val card = carouselItems[page]
                         FeaturedSpotlightBanner(
                             anime = card,
-                            onWatchClick = { onAnimeClick(card.id) }
+                            onWatchClick = { onAnimeClick(card) }
                         )
                     }
 
@@ -364,7 +410,7 @@ fun MainCatalogFeed(
                     ) {
                         items(rail.items, key = { it.id + "_" + rail.title }) { card ->
                             Box(modifier = Modifier.width(115.dp)) {
-                                AnimeCardItem(card = card, onClick = { onAnimeClick(card.id) })
+                                AnimeCardItem(card = card, onClick = { onAnimeClick(card) })
                             }
                         }
                     }
@@ -391,7 +437,7 @@ fun MainCatalogFeed(
                 ) {
                     for (card in rowItems) {
                         Box(modifier = Modifier.weight(1f)) {
-                            AnimeCardItem(card = card, onClick = { onAnimeClick(card.id) })
+                            AnimeCardItem(card = card, onClick = { onAnimeClick(card) })
                         }
                     }
                     val emptySlots = 3 - rowItems.size
@@ -680,6 +726,22 @@ fun AnimeCardItem(
                 )
             }
 
+            if (card.isAdult) {
+                Surface(
+                    shape = RoundedCornerShape(bottomEnd = 6.dp),
+                    color = Color.Red.copy(alpha = 0.85f),
+                    modifier = Modifier.align(Alignment.TopStart)
+                ) {
+                    Text(
+                        text = "18+",
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
             if (card.score.isNotEmpty()) {
                 Surface(
                     shape = RoundedCornerShape(bottomStart = 6.dp),
@@ -714,7 +776,7 @@ fun AnimeCardItem(
 @Composable
 fun SearchFeedGrid(
     results: List<AnimeCard>,
-    onAnimeClick: (String) -> Unit
+    onAnimeClick: (AnimeCard) -> Unit
 ) {
     if (results.isEmpty()) {
         Box(
@@ -732,7 +794,7 @@ fun SearchFeedGrid(
             modifier = Modifier.fillMaxSize()
         ) {
             items(results, key = { it.id }) { card ->
-                AnimeCardItem(card = card, onClick = { onAnimeClick(card.id) })
+                AnimeCardItem(card = card, onClick = { onAnimeClick(card) })
             }
         }
     }

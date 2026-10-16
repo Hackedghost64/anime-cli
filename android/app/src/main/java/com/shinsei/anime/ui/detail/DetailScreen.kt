@@ -229,6 +229,22 @@ fun DetailScreen(
                         )
                     }
 
+                    if (detail.isAdult) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFFD32F2F)
+                        ) {
+                            Text(
+                                text = "18+ ADULT",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Black,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.width(12.dp))
 
                     // Sub / Dub Selector Chip

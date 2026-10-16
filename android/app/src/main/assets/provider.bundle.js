@@ -48,9 +48,22 @@
 
   const postCache = new Map();
 
+  function isAdultContent(p) {
+    if (!p) return false;
+    const genres = (typeof p.genres === 'string' ? p.genres : (Array.isArray(p.genres) ? p.genres.join(', ') : '')).toLowerCase();
+    const age = String(p.age || p.rating || '').toLowerCase();
+    const title = String(p.title || p.name || '').toLowerCase();
+    const synopsis = String(p.synopsis || p.overview || p.description || '').toLowerCase();
+
+    if (genres.includes('hentai') || genres.includes('erotica')) return true;
+    if (age.includes('18+') || age === 'rx' || age === 'r+') return true;
+    if (title.includes('hentai')) return true;
+    return false;
+  }
+
   /**
    * 1. Home Feed Spotlight and Curated Rails
-   * Optimized for instant <1s load time without blocking network hydration loops.
+   * Optimized for instant load time with clean non-adult curation.
    */
   exports.getHomeFeed = async function() {
     try {
@@ -58,20 +71,23 @@
       const spotlight = [];
       const rails = [];
 
-      // 1. Featured Spotlight Banner (Top item from Anilab API, already fully populated)
+      // 1. Featured Spotlight Banner (Top item from Anilab API, verify not adult)
       if (data.featured && (data.featured.id || data.featured.title)) {
         const feat = data.featured;
         postCache.set(String(feat.id), feat);
-        spotlight.push({
-          id: String(feat.id),
-          title: feat.title || "Featured Anime",
-          poster: feat.poster || "",
-          backdrop: feat.backdrop || feat.banner || feat.poster || "",
-          synopsis: feat.synopsis || feat.overview || "",
-          score: feat.score || feat.rating || "",
-          type: feat.type || "TV",
-          genres: typeof feat.genres === 'string' ? feat.genres.split(',').map(s => s.trim()) : (Array.isArray(feat.genres) ? feat.genres : [])
-        });
+        if (!isAdultContent(feat)) {
+          spotlight.push({
+            id: String(feat.id),
+            title: feat.title || "Featured Anime",
+            poster: feat.poster || "",
+            backdrop: feat.backdrop || feat.banner || feat.poster || "",
+            synopsis: feat.synopsis || feat.overview || "",
+            score: feat.score || feat.rating || "",
+            type: feat.type || "TV",
+            genres: typeof feat.genres === 'string' ? feat.genres.split(',').map(s => s.trim()) : (Array.isArray(feat.genres) ? feat.genres : []),
+            isAdult: false
+          });
+        }
       }
 
       // 2. Sections (Spotlight, Trending, Most Popular, Top Airing, etc.)
@@ -81,11 +97,11 @@
       const spotlightSec = sections.find(s => s.name && s.name.toLowerCase() === 'spotlight');
       const spotlightPosts = (spotlightSec && Array.isArray(spotlightSec.posts)) ? spotlightSec.posts.slice(0, 10) : [];
 
-      // Fast, bounded hydration for at most 3 spotlight items (max 2 seconds timeout)
+      // Hydrate all spotlight posts (up to 10) in parallel with a 3.5s timeout guard
       const spotlightToHydrate = spotlightPosts
         .map(p => String(p.id))
         .filter(pid => pid && !postCache.has(pid))
-        .slice(0, 3);
+        .slice(0, 10);
 
       if (spotlightToHydrate.length > 0) {
         try {
@@ -97,41 +113,50 @@
           }));
           await Promise.race([
             hydrateTask,
-            new Promise(resolve => setTimeout(resolve, 2000))
+            new Promise(resolve => setTimeout(resolve, 3500))
           ]);
         } catch {}
       }
 
-      // Populate spotlight carousel items
+      // Populate spotlight carousel items (strictly non-adult, valid titles only)
       for (const p of spotlightPosts) {
         const pid = String(p.id);
         if (spotlight.some(s => s.id === pid)) continue;
         const cached = postCache.get(pid);
+        if (isAdultContent(cached || p)) continue;
+
+        const title = cached?.title || p.title || p.name || "";
+        if (!title || title.toLowerCase() === "anime") continue;
+
         spotlight.push({
           id: pid,
-          title: cached?.title || p.title || p.name || "",
+          title: title,
           poster: cached?.poster || p.poster || "",
           backdrop: cached?.backdrop || cached?.poster || p.poster || "",
           synopsis: cached?.synopsis || "",
           score: cached?.rating || p.score || "",
           type: cached?.type || p.type || "TV",
-          genres: cached?.genres || []
+          genres: cached?.genres || [],
+          isAdult: false
         });
       }
 
-      // Rails: populate immediately from section posts (no blocking HTTP requests!)
+      // Rails: populate from section posts, strictly filter out adult/hentai content
       for (const sec of sections) {
+        if (sec.name && sec.name.toLowerCase() === 'spotlight') continue;
         const posts = (sec.posts || []).map(p => {
           const pid = String(p.id);
           const cached = postCache.get(pid);
+          const adult = isAdultContent(cached || p);
           return {
             id: pid,
             title: cached?.title || p.title || p.name || "",
             poster: p.poster || cached?.poster || "",
             score: cached?.rating || p.score || "",
-            type: cached?.type || p.type || "TV"
+            type: cached?.type || p.type || "TV",
+            isAdult: adult
           };
-        }).filter(p => p.id && (p.poster || p.title));
+        }).filter(p => p.id && (p.poster || p.title) && !p.isAdult);
 
         if (posts.length > 0) {
           rails.push({
@@ -141,27 +166,30 @@
         }
       }
 
-      // If spotlight had none, populate from first rail
+      // If spotlight had none, populate from first non-adult rail
       if (spotlight.length === 0 && rails.length > 0 && rails[0].items.length > 0) {
         const first = rails[0].items[0];
-        spotlight.push({
-          id: first.id,
-          title: first.title,
-          poster: first.poster,
-          backdrop: first.poster,
-          synopsis: "",
-          score: first.score,
-          type: first.type,
-          genres: []
-        });
+        if (!first.isAdult) {
+          spotlight.push({
+            id: first.id,
+            title: first.title,
+            poster: first.poster,
+            backdrop: first.poster,
+            synopsis: "",
+            score: first.score,
+            type: first.type,
+            genres: [],
+            isAdult: false
+          });
+        }
       }
 
-      // Combined flat items list
+      // Combined flat items list (non-adult only)
       const items = [];
       const seenIds = new Set();
       for (const rail of rails) {
         for (const item of rail.items) {
-          if (!seenIds.has(item.id)) {
+          if (!seenIds.has(item.id) && !item.isAdult) {
             seenIds.add(item.id);
             items.push(item);
           }
@@ -187,28 +215,33 @@
       if (!rawPosts.length) return { results: [], hasMore: false };
 
       // In Anilab API, search items contain { id, poster }.
-      // Hydrate titles for top 5 results with a 2.5s maximum timeout guard.
-      const toHydrate = rawPosts.slice(0, 5);
+      // Hydrate titles for top 8 results with a 3.0s maximum timeout guard.
+      const toHydrate = rawPosts.slice(0, 8);
       try {
         const hydTask = Promise.allSettled(
           toHydrate.map(p => exports.getPost(p.id))
         );
         await Promise.race([
           hydTask,
-          new Promise(resolve => setTimeout(resolve, 2500))
+          new Promise(resolve => setTimeout(resolve, 3000))
         ]);
       } catch {}
 
       const results = rawPosts.map((p) => {
         const pid = String(p.id);
         const cached = postCache.get(pid);
+        const adult = isAdultContent(cached || p);
         if (cached && cached.title) {
           return {
             ...formatAnimeItem(p),
-            ...cached
+            ...cached,
+            isAdult: adult
           };
         }
-        return formatAnimeItem(p);
+        return {
+          ...formatAnimeItem(p),
+          isAdult: adult
+        };
       });
 
       return {
@@ -232,6 +265,7 @@
         headers: DEFAULT_HEADERS
       });
       const p = data.data || data;
+      const adult = isAdultContent(p);
       const res = {
         id: String(p.id || postId),
         title: p.title || p.name || p.english || "Unknown Title",
@@ -239,6 +273,7 @@
         backdrop: p.backdrop || p.banner || p.poster || "",
         synopsis: p.synopsis || p.description || p.overview || "",
         rating: p.score || p.rating || "N/A",
+        age: p.age || "",
         year: p.year || "",
         genres: typeof p.genres === 'string' ? p.genres.split(',').map(s => s.trim()) : (Array.isArray(p.genres) ? p.genres : []),
         type: p.type || "TV",
@@ -247,7 +282,8 @@
             title: s.title || `Season ${s.season_number || i + 1}`,
             seasonNumber: s.season_number || i + 1
         })),
-        mal_id: p.mal_id || p.malId || 0
+        mal_id: p.mal_id || p.malId || 0,
+        isAdult: adult
       };
       postCache.set(key, res);
       return res;
@@ -500,7 +536,8 @@
       title: p.title || p.name || "",
       poster: p.poster || p.image || "",
       score: p.score || p.rating || "",
-      type: p.type || "TV"
+      type: p.type || "TV",
+      isAdult: isAdultContent(p)
     };
   }
 

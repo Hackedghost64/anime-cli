@@ -5,7 +5,8 @@ data class AnimeCard(
     val title: String,
     val poster: String,
     val score: String = "",
-    val type: String = "TV"
+    val type: String = "TV",
+    val isAdult: Boolean = false
 )
 
 data class SeasonItem(
@@ -23,7 +24,8 @@ data class AnimeDetail(
     val type: String = "TV",
     val genres: List<String> = emptyList(),
     val malId: Long = 0L,
-    val seasons: List<SeasonItem> = emptyList()
+    val seasons: List<SeasonItem> = emptyList(),
+    val isAdult: Boolean = false
 )
 
 data class EpisodeItem(
