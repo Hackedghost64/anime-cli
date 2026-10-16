@@ -51,8 +51,8 @@ const RELEASES: ReleaseCard[] = [
     category: 'python',
     version: 'v1.2.0',
     size: '1.4 MB',
-    filename: 'anime-cli-sdist.tar.gz',
-    downloadUrl: 'https://github.com/Hackedghost64/anime-cli/releases',
+    filename: 'anime_cli-1.2.0.tar.gz',
+    downloadUrl: 'https://github.com/Hackedghost64/anime-cli/releases/latest/download/anime_cli-1.2.0.tar.gz',
     command: 'pip install --user anime-cli',
     features: ['AniSkip Automated MPV Lua', 'Binge Roulette (-B)', 'Live Airing Radar (--today)', 'Batch Downloader (-o)'],
   },
@@ -220,6 +220,18 @@ export const DownloadsSection: React.FC = () => {
               </a>
             </div>
           ))}
+        </div>
+
+        {/* View all assets on GitHub */}
+        <div className="mt-8 text-center">
+          <a
+            href="https://github.com/Hackedghost64/anime-cli/releases"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-xs font-mono text-zinc-400 hover:text-[#ff640a] transition-colors"
+          >
+            <span>View all assets, source tarballs & wheels on GitHub Releases →</span>
+          </a>
         </div>
 
       </div>
