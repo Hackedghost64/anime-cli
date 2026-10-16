@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="anime-cli",
-    version="1.0.0",
+    version="1.2.0",
     description="⚡ Next-Gen Anime Streaming & Browser CLI with AniSkip auto-skipping and zero-config tunneling",
     author="Divyam",
     packages=find_packages(),
