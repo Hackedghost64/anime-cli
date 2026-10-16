@@ -5,6 +5,7 @@
 [![C99](https://img.shields.io/badge/C-99-A8B9CC?style=for-the-badge&logo=c&logoColor=white)](https://en.wikipedia.org/wiki/C99)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Android](https://img.shields.io/badge/Android-Jetpack%20Compose-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![Showcase Website](https://img.shields.io/badge/Website-Live%20Showcase-5f8bff?style=for-the-badge&logo=react&logoColor=white)](https://hackedghost64.github.io/anime-cli/)
 [![Release](https://img.shields.io/badge/Release-v1.2.0-blue?style=for-the-badge&logo=github)](https://github.com/Hackedghost64/anime-cli/releases)
 [![License](https://img.shields.io/badge/License-MIT-orange?style=for-the-badge)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=for-the-badge)](https://github.com/Hackedghost64/anime-cli/pulls)
@@ -12,7 +13,7 @@
 **The Ultimate Ecosystem for Anime Streaming: High-Speed C Binary, Full-Featured Python Hub & Native Android App.**  
 Direct Mobile APIs • 1080p Kyoto Streams • AniSkip Auto-Skip • Sub & Dub • Unified Zero-Break Config • Zero-Config Mobile Sync.
 
-[⚡ Benchmarks](#-benchmarks--speed-comparison) • [1-Click Install](#-1-click-universal-install-all-devices) • [⚡ anime-lite (C Edition)](#-anime-lite-c-edition) • [🐍 anime-cli (Python Hub)](#-anime-cli-python-hub) • [📱 Shinsei Android App](#-shinsei-anime-android-app-100-standalone) • [⚙️ Unified Config](#️-single-source-of-truth-configjson) • [📦 Releases](#-releases--prebuilt-binaries) • [🤝 Contributing](#-contributing)
+[🌐 Live Showcase Website](https://hackedghost64.github.io/anime-cli/) • [⚡ Benchmarks](#-benchmarks--speed-comparison) • [1-Click Install](#-1-click-universal-install-all-devices) • [⚡ anime-lite (C Edition)](#-anime-lite-c-edition) • [🐍 anime-cli (Python Hub)](#-anime-cli-python-hub) • [📱 Shinsei Android App](#-shinsei-anime-android-app-100-standalone) • [⚙️ Unified Config](#️-single-source-of-truth-configjson) • [📦 Releases](#-releases--prebuilt-binaries) • [🤝 Contributing](#-contributing)
 
 </div>
 
