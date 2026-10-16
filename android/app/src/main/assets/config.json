@@ -1,0 +1,34 @@
+{
+  "anilab": {
+    "base_url": "https://anilab2.amdapi.click/api",
+    "headers": {
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "os-version": "35",
+      "app-id": "com.xo.anilab",
+      "app-version": "105",
+      "os-id": "",
+      "User-Agent": "okhttp/4.12.0"
+    }
+  },
+  "kyoto": {
+    "base_url": "https://app.kyotoplayer.com/api/v4",
+    "headers": {
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "os-version": "35",
+      "app-id": "com.kyotoplayer",
+      "app-version": "126",
+      "User-Agent": "okhttp/4.12.0"
+    },
+    "stream_headers": {
+      "Referer": "https://play.app/",
+      "X-Requested-With": "PLAY",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8000
+  }
+}

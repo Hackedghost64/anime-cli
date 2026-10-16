@@ -517,7 +517,7 @@ def cmd_init(port: int = 8088):
 # -----------------------------------------------------------------------------
 # COMMAND: build-apk (Build Shinsei Android APK with Gradle & Optional ADB Install)
 # -----------------------------------------------------------------------------
-def cmd_build_apk(release: bool = False, install: bool = False):
+def cmd_build_apk(release: bool = True, install: bool = False):
     banner()
     android_candidates = [
         os.path.join(BASE_DIR, "android"),
@@ -553,9 +553,22 @@ def cmd_build_apk(release: bool = False, install: bool = False):
         print(f"Install JDK with: {C_BOLD}sudo apt install -y openjdk-17-jdk{C_RESET}")
         return
 
+    # 1. Sync config.json into android assets so app stays synchronized with CLI
+    config_candidates = [
+        os.path.join(BASE_DIR, "config.json"),
+        os.path.join(os.getcwd(), "config.json"),
+    ]
+    for c_path in config_candidates:
+        if os.path.isfile(c_path):
+            assets_dir = os.path.join(android_dir, "app/src/main/assets")
+            os.makedirs(assets_dir, exist_ok=True)
+            shutil.copy2(c_path, os.path.join(assets_dir, "config.json"))
+            print(f"  • {C_BOLD}Config Sync:{C_RESET} {C_GREEN}config.json synced into Android assets{C_RESET}")
+            break
+
     os.chmod(gradlew_path, 0o755)
 
-    build_type = "Release" if release else "Debug"
+    build_type = "Release (R8 Minified)" if release else "Debug"
     gradle_task = "assembleRelease" if release else "assembleDebug"
     out_apk_rel = (
         "app/build/outputs/apk/release/app-release.apk"
@@ -608,13 +621,32 @@ def cmd_build_apk(release: bool = False, install: bool = False):
                 print(f"{C_GOLD}No authorized device found via ADB. Connect your phone with USB debugging enabled.{C_RESET}")
                 return
 
-            print(f"{C_GREEN}Found device: {lines[0].split()[0]}. Installing...{C_RESET}")
-            install_cmd = [adb_bin, "install", "-r", out_apk_path]
-            i_ret = subprocess.run(install_cmd)
-            if i_ret.returncode == 0:
-                print(f"\n{C_GREEN}{C_BOLD}✓ Shinsei Anime app successfully installed on your phone!{C_RESET}\n")
+            dev_id = lines[0].split()[0]
+            print(f"{C_GREEN}Found connected device: {dev_id}{C_RESET}")
+            print(f"{C_CYAN}Installing APK (check your phone screen if 'Install via USB' appears)...{C_RESET}")
+            install_cmd = [adb_bin, "-s", dev_id, "install", "-r", "-d", "-g", out_apk_path]
+            i_ret = subprocess.run(install_cmd, capture_output=True, text=True)
+            output_msg = (i_ret.stdout + " " + i_ret.stderr).strip()
+
+            if i_ret.returncode == 0 and "INSTALL_FAILED" not in output_msg.upper():
+                print(f"\n{C_GREEN}{C_BOLD}✓ Shinsei Anime app successfully installed on {dev_id}!{C_RESET}")
+                # Start app
+                subprocess.run([adb_bin, "-s", dev_id, "shell", "am", "start", "-n", "com.shinsei.anime/.ui.MainActivity"], capture_output=True)
+                print(f"{C_CYAN}  • Launched Shinsei Anime on your phone!{C_RESET}\n")
             else:
-                print(f"\n{C_RED}ADB installation failed.{C_RESET}\n")
+                if "INSTALL_FAILED_UPDATE_INCOMPATIBLE" in output_msg:
+                    print(f"{C_YELLOW}Signature mismatch with existing app. Performing clean re-install...{C_RESET}")
+                    subprocess.run([adb_bin, "-s", dev_id, "uninstall", "com.shinsei.anime"], capture_output=True)
+                    i_ret2 = subprocess.run([adb_bin, "-s", dev_id, "install", "-r", "-g", out_apk_path], capture_output=True, text=True)
+                    if i_ret2.returncode == 0 and "INSTALL_FAILED" not in (i_ret2.stdout + i_ret2.stderr).upper():
+                        print(f"\n{C_GREEN}{C_BOLD}✓ Re-install successful!{C_RESET}")
+                        subprocess.run([adb_bin, "-s", dev_id, "shell", "am", "start", "-n", "com.shinsei.anime/.ui.MainActivity"], capture_output=True)
+                        print(f"{C_CYAN}  • Launched Shinsei Anime on your phone!{C_RESET}\n")
+                    else:
+                        print(f"\n{C_RED}ADB installation failed after uninstall: {i_ret2.stderr or i_ret2.stdout}{C_RESET}\n")
+                else:
+                    print(f"\n{C_RED}ADB installation failed: {output_msg}{C_RESET}")
+                    print(f"{C_YELLOW}Tip: Ensure phone screen is unlocked and 'Install via USB' is allowed in Developer Options.{C_RESET}\n")
 
 # -----------------------------------------------------------------------------
 # COMMAND: terminal player (The 10x better ani-cli)
@@ -1177,7 +1209,8 @@ def main():
     parser.add_argument("query", nargs="?", default=None, help="Anime title to search & watch immediately")
     parser.add_argument("-s", "--sync", dest="sync", action="store_true", help="Start P2P sync server & QR code for Shinsei Mobile App")
     parser.add_argument("--build-apk", dest="build_apk", action="store_true", help="Build Shinsei Android APK using Gradle")
-    parser.add_argument("--release", dest="release", action="store_true", help="Build release APK instead of debug APK")
+    parser.add_argument("--release", dest="release", action="store_true", default=True, help="Build release APK (default: true)")
+    parser.add_argument("--debug", dest="debug", action="store_true", help="Build debug APK instead of release APK")
     parser.add_argument("--install", dest="install", action="store_true", help="Automatically install APK to connected phone via ADB after build")
     parser.add_argument("-i", "--init", dest="init", action="store_true", help="Start runner initialization server hosting provider.bundle.js")
     parser.add_argument("-c", "--continue", dest="continue_last", action="store_true", help="Resume last watched anime episode")
@@ -1229,7 +1262,7 @@ def main():
     elif args.sync or (args.query in ("sync", "-s")):
         cmd_sync(port=args.port)
     elif args.build_apk or (args.query in ("build-apk", "build", "apk")):
-        cmd_build_apk(release=args.release, install=args.install)
+        cmd_build_apk(release=not args.debug, install=args.install)
     elif args.server or args.query in ("server", "serve", "stream"):
         cmd_stream(port=args.port, keep_awake=args.keep_awake)
     elif args.binge or (args.query == "binge"):

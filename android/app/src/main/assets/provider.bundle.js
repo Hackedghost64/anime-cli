@@ -8,11 +8,12 @@
 
   exports.version = "1.5.1";
 
-  const ANILAB_BASE = "https://anilab2.amdapi.click/api";
-  const KYOTO_BASE = "https://app.kyotoplayer.com/api/v4";
-  const ANISKIP_BASE = "https://api.aniskip.com/v2";
+  const _cfg = (typeof globalThis.APP_CONFIG === 'object' && globalThis.APP_CONFIG) || {};
+  const ANILAB_BASE = (_cfg.anilab && _cfg.anilab.base_url) || "https://anilab2.amdapi.click/api";
+  const KYOTO_BASE = (_cfg.kyoto && _cfg.kyoto.base_url) || "https://app.kyotoplayer.com/api/v4";
+  const ANISKIP_BASE = (_cfg.aniskip && _cfg.aniskip.base_url) || "https://api.aniskip.com/v2";
 
-  const DEFAULT_HEADERS = {
+  const DEFAULT_HEADERS = (_cfg.anilab && _cfg.anilab.headers) || {
     "Accept": "application/json",
     "Content-Type": "application/json",
     "os-version": "35",

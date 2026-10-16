@@ -13,6 +13,7 @@ setup(
     },
     data_files=[
         ("static", ["static/index.html", "static/app.js", "static/style.css"]),
+        ("", ["config.json"]),
     ],
     py_modules=[
         "cli",

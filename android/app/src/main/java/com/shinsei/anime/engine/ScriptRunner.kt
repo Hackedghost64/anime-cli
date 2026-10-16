@@ -149,6 +149,14 @@ class ScriptRunner(private val context: Context) {
             }
 
             val scriptCode = loadScript()
+            val configCode = try {
+                context.assets.open("config.json").use { inputStream ->
+                    val cfg = InputStreamReader(inputStream).readText()
+                    "try { globalThis.APP_CONFIG = $cfg; } catch(e) {}"
+                }
+            } catch (e: Exception) {
+                ""
+            }
             val html = """
                 <!DOCTYPE html>
                 <html>
@@ -157,6 +165,7 @@ class ScriptRunner(private val context: Context) {
                 <script>
                 var exports = {};
                 globalThis.ShinseiProvider = exports;
+                $configCode
 
                 // Wire up global httpFetch to native OkHttp bridge for fast non-Cloudflare traffic
                 globalThis.httpFetch = async function(url, options) {
