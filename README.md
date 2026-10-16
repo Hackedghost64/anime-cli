@@ -24,19 +24,13 @@ So I reverse-engineered the actual mobile backend behind Android streaming apps 
 
 ---
 
-## ⚡ 1-Click Install
+## ⚡ 1-Click Universal Install (All Devices)
 
-### 🐧 Linux & macOS
+Run this single command on **Linux**, **macOS**, or **Android (Termux)**:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Hackedghost64/anime-cli/main/install.sh | bash
 ```
-
-### 📱 Android (Termux)
-Run this single command inside the Termux app:
-```bash
-curl -sSL https://raw.githubusercontent.com/Hackedghost64/anime-cli/main/install-termux.sh | bash
-```
-> Installs Python, Git, and FFmpeg, configures your preferred Android video player (MPV Android, VLC Android, Just Player, MX Player, or system chooser), and creates instant `anime` and `anime-cli` commands.
+> Automatically detects your OS, configures dependencies, installs `anime-cli` (Python Hub), compiles `anime-lite` (C Edition), and links terminal commands `anime`, `anime-cli`, and `anime-lite`.
 
 ### 🪟 Windows (PowerShell)
 Open PowerShell and run:
@@ -96,6 +90,9 @@ make install-lite
 ### ⚡ Quick Usage Examples
 
 ```bash
+# ⚡ Resume your last watched episode right where you left off
+anime-lite -c
+
 # Interactive title search & streaming via fzf
 anime-lite "jujutsu kaisen"
 
@@ -118,10 +115,11 @@ anime-lite "bleach" -p vlc
 | **Streaming Backend** | Direct Anilab & Kyoto 1080p HLS APIs | Direct Anilab & Kyoto 1080p HLS APIs |
 | **Terminal UI** | Lightning-fast `fzf` picker with ANSI fallback | Interactive multi-menu dashboard & banners |
 | **Audio Server Modes** | Japanese Sub (`-s`) & English Dub (`-d`) | Multi-language audio server negotiation |
+| **Continue Watching** | ✅ **Instant resume (`-c`)** at saved duration | ✅ Full resume (`-c`) with auto next-episode |
 | **Web PWA Player** | ❌ (Terminal streaming only) | ✅ Obsidian Vidstack Web App (`-b`) |
 | **Mobile Tunnel & QR** | ❌ | ✅ Encrypted Cloudflare HTTPS QR tunnel (`-s`) |
 | **Android Sync & App** | ❌ | ✅ P2P Android watch history sync (`--sync`) |
-| **History Tracking** | ❌ (Stateless, minimal memory) | ✅ SQLite database + resume (`-c`) |
+| **History Tracking** | ✅ Fast local JSON history (`~/.local/share/anime-cli/history.json`) | ✅ SQLite database + watch progress (`-c`) |
 | **AniSkip Intro Skip** | MPV native key controls | Automated MPV Lua auto-skip & Web buttons |
 | **Batch Downloader** | ❌ | ✅ 1080p MP4 batch downloader (`-o`) |
 | **Ideal For** | SSH, Raspberry Pi, Termux, ani-cli veterans | All-in-one desktop hub, home media streaming |
