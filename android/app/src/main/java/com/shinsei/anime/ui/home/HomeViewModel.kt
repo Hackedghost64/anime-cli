@@ -48,6 +48,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val cachePrefs = app.getSharedPreferences("home_feed_cache", android.content.Context.MODE_PRIVATE)
     private val metaCache = app.getSharedPreferences("post_metadata_cache", android.content.Context.MODE_PRIVATE)
 
+    val updateState = app.updateManager.updateState
+
     init {
         // Offload disk cache read and JSON parsing to IO to avoid blocking main thread at startup
         viewModelScope.launch(Dispatchers.IO) {
@@ -65,6 +67,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
             loadHomeFeed()
         }
+        viewModelScope.launch(Dispatchers.IO) {
+            app.updateManager.checkForUpdate()
+        }
+    }
+
+    fun downloadAndInstallUpdate(downloadUrl: String) {
+        viewModelScope.launch {
+            app.updateManager.downloadAndInstall(downloadUrl)
+        }
+    }
+
+    fun dismissUpdate() {
+        app.updateManager.dismissUpdate()
     }
 
     fun loadHomeFeed() {

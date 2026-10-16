@@ -42,3 +42,6 @@ lite/bin/
 lite/src/*.o
 lite/tests/*.o
 .superpowers/
+
+# Website Dependencies
+website/node_modules/

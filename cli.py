@@ -49,6 +49,61 @@ C_CYAN = "\033[38;2;0;210;255m"
 C_GREEN = "\033[38;2;0;210;106m"
 C_RED = "\033[38;2;255;51;75m"
 
+APP_VERSION = "1.2.0"
+GITHUB_REPO = "Hackedghost64/anime-cli"
+
+def check_for_cli_updates(timeout_sec: float = 1.2) -> Optional[str]:
+    """Non-blocking background check for GitHub releases. Throttled to once every 24 hours."""
+    try:
+        cache_dir = os.path.expanduser("~/.local/share/anime-cli")
+        os.makedirs(cache_dir, exist_ok=True)
+        cache_file = os.path.join(cache_dir, "update_cache.json")
+        now = time.time()
+
+        cached_data = {}
+        if os.path.exists(cache_file):
+            try:
+                with open(cache_file, "r") as f:
+                    cached_data = json.load(f)
+            except Exception:
+                pass
+
+        last_check = cached_data.get("last_check", 0)
+        latest_version = cached_data.get("latest_version")
+
+        # If checked within 24 hours, return cached status
+        if now - last_check < 86400 and latest_version:
+            if _is_newer_version(latest_version, APP_VERSION):
+                return latest_version
+            return None
+
+        import urllib.request
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
+            headers={"User-Agent": "anime-cli", "Accept": "application/vnd.github.v3+json"}
+        )
+        with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+            if resp.status == 200:
+                data = json.loads(resp.read().decode())
+                remote_tag = data.get("tag_name", "").lstrip("v").strip()
+                cached_data["last_check"] = now
+                cached_data["latest_version"] = remote_tag
+                with open(cache_file, "w") as f:
+                    json.dump(cached_data, f)
+                if remote_tag and _is_newer_version(remote_tag, APP_VERSION):
+                    return remote_tag
+    except Exception:
+        pass
+    return None
+
+def _is_newer_version(remote: str, current: str) -> bool:
+    try:
+        r_parts = [int(p) for p in remote.split(".") if p.isdigit()]
+        c_parts = [int(p) for p in current.split(".") if p.isdigit()]
+        return r_parts > c_parts
+    except Exception:
+        return False
+
 def banner():
     print(f"""
 {C_ORANGE}{C_BOLD}  ██████╗ ██╗  ██╗██╗███╗   ██╗███████╗███████╗██╗     ██████╗██╗     ██╗
@@ -59,6 +114,9 @@ def banner():
   ╚══════╝ ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝╚═╝     ╚═════╝╚══════╝╚═╝{C_RESET}
     {C_DIM}Direct API · 1080p Kyoto · AniSkip Auto-Skip · Sub/Dub where available · Zero-Config{C_RESET}
 """)
+    newer_ver = check_for_cli_updates()
+    if newer_ver:
+        print(f"  {C_GOLD}⚡ Update available: v{APP_VERSION} → v{newer_ver}! Run {C_BOLD}anime-cli --update{C_RESET}{C_GOLD} to upgrade.{C_RESET}\n")
 
 def get_local_ip() -> str:
     try:
@@ -513,6 +571,58 @@ def cmd_init(port: int = 8088):
     print(f"\n{C_GOLD}Note: Mobile app initialization is automatic! The Android app works completely out-of-the-box.{C_RESET}")
     print(f"{C_CYAN}Starting P2P watch history synchronization instead...{C_RESET}\n")
     cmd_sync(port=port)
+
+# -----------------------------------------------------------------------------
+# COMMAND: update (Check and apply updates for anime-cli & anime-lite)
+# -----------------------------------------------------------------------------
+def cmd_update():
+    banner()
+    print(f"{C_BOLD}🔄 Checking for updates for anime-cli & anime-lite...{C_RESET}\n")
+
+    is_git = False
+    git_dir = BASE_DIR
+    if os.path.isdir(os.path.join(git_dir, ".git")):
+        is_git = True
+    elif subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=os.getcwd(), capture_output=True).returncode == 0:
+        is_git = True
+        git_dir = os.getcwd()
+
+    if is_git:
+        print(f"  • {C_CYAN}Git repository detected at:{C_RESET} {git_dir}")
+        print(f"  • {C_BOLD}Pulling latest changes from origin/main...{C_RESET}")
+        ret = subprocess.run(["git", "pull", "--ff-only", "origin", "main"], cwd=git_dir)
+        if ret.returncode != 0:
+            print(f"{C_YELLOW}Direct fast-forward failed. Trying git pull...{C_RESET}")
+            ret2 = subprocess.run(["git", "pull", "origin", "main"], cwd=git_dir)
+            if ret2.returncode != 0:
+                print(f"{C_RED}Git pull encountered conflicts or error.{C_RESET}")
+                return
+
+        print(f"  • {C_GREEN}Repository updated to latest commit.{C_RESET}")
+
+        # Update Python package
+        print(f"  • {C_BOLD}Updating Python package (pip install -e .)...{C_RESET}")
+        subprocess.run([sys.executable, "-m", "pip", "install", "-e", "."], cwd=git_dir, capture_output=True)
+
+        # Build C lite if make & gcc present
+        if shutil.which("make") and (shutil.which("gcc") or shutil.which("clang")):
+            print(f"  • {C_BOLD}Compiling and installing anime-lite (C Edition)...{C_RESET}")
+            make_ret = subprocess.run(["make", "install-lite"], cwd=git_dir)
+            if make_ret.returncode == 0:
+                print(f"  • {C_GREEN}anime-lite successfully recompiled & installed to ~/.local/bin/anime-lite{C_RESET}")
+
+        # Sync config.json into android assets
+        android_assets = os.path.join(git_dir, "android/app/src/main/assets")
+        if os.path.isdir(android_assets) and os.path.isfile(os.path.join(git_dir, "config.json")):
+            shutil.copy2(os.path.join(git_dir, "config.json"), os.path.join(android_assets, "config.json"))
+            print(f"  • {C_GREEN}config.json synced into Android assets.{C_RESET}")
+
+        print(f"\n{C_GREEN}{C_BOLD}✓ All CLI tiers updated successfully to the latest release!{C_RESET}\n")
+    else:
+        print(f"  • {C_BOLD}Upgrading anime-cli via pip...{C_RESET}")
+        cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "--user", f"git+https://github.com/{GITHUB_REPO}.git"]
+        subprocess.run(cmd)
+        print(f"\n{C_GREEN}{C_BOLD}✓ anime-cli upgraded via pip!{C_RESET}\n")
 
 # -----------------------------------------------------------------------------
 # COMMAND: build-apk (Build Shinsei Android APK with Gradle & Optional ADB Install)
@@ -1133,6 +1243,7 @@ async def interactive_menu():
             "🔍 Search & Watch Anime",
             "⚡ P2P Mobile Sync & Init (QR code for Shinsei App) [-s]",
             "📱 Build Shinsei Android APK (--build-apk)",
+            "🔄 Check & Install Updates (--update)",
             "🎲 Binge Roulette (Quick 3-Question Match)",
             "📅 Today's Airing Radar (Live Release Schedule)",
             "▶ Continue Watching (Resume last episode)",
@@ -1152,32 +1263,35 @@ async def interactive_menu():
             cmd_build_apk()
             break
         elif sel == 3:
+            cmd_update()
+            break
+        elif sel == 4:
             from anilab.binge import run_binge_match
             title = await run_binge_match()
             if title:
                 await cmd_terminal(query=title, ep_num=1)
             break
-        elif sel == 4:
+        elif sel == 5:
             from anilab.schedule import run_schedule_radar
             res = await run_schedule_radar()
             if res:
                 title, ep = res
                 await cmd_terminal(query=title, ep_num=ep)
             break
-        elif sel == 5:
+        elif sel == 6:
             await cmd_terminal(continue_last=True)
             break
-        elif sel == 6:
+        elif sel == 7:
             await cmd_terminal(download=True)
             break
-        elif sel == 7:
+        elif sel == 8:
             import player
             player.choose_player_interactive()
             try:
                 input(f"\n{C_ORANGE}Press Enter to return to menu...{C_RESET}")
             except (KeyboardInterrupt, EOFError):
                 break
-        elif sel == 8:
+        elif sel == 9:
             show_help()
             try:
                 input(f"\n{C_ORANGE}Press Enter to return to menu...{C_RESET}")
@@ -1203,7 +1317,8 @@ def main():
         add_help=False
     )
     parser.add_argument("-h", "--help", action="store_true", help="Show help and shortcuts guide")
-    parser.add_argument("-v", "--version", action="version", version="anime-cli 1.0.0")
+    parser.add_argument("-v", "--version", action="version", version=f"anime-cli {APP_VERSION}")
+    parser.add_argument("-u", "--update", dest="update", action="store_true", help="Check for and install latest updates for anime-cli & anime-lite")
     
     # Simple flags
     parser.add_argument("query", nargs="?", default=None, help="Anime title to search & watch immediately")
@@ -1263,6 +1378,8 @@ def main():
         cmd_sync(port=args.port)
     elif args.build_apk or (args.query in ("build-apk", "build", "apk")):
         cmd_build_apk(release=not args.debug, install=args.install)
+    elif args.update or (args.query in ("update", "upgrade", "--update")):
+        cmd_update()
     elif args.server or args.query in ("server", "serve", "stream"):
         cmd_stream(port=args.port, keep_awake=args.keep_awake)
     elif args.binge or (args.query == "binge"):

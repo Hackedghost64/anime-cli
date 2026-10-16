@@ -138,6 +138,120 @@ fun HomeScreen(
         )
     }
 
+    val updateState by viewModel.updateState.collectAsState()
+
+    when (val state = updateState) {
+        is com.shinsei.anime.data.update.AppUpdateState.Available -> {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissUpdate() },
+                title = {
+                    Text(
+                        text = "⚡ Shinsei Anime v${state.version} Available",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp
+                    )
+                },
+                text = {
+                    Column {
+                        Text(
+                            text = "A new official release is available on GitHub with performance enhancements and bug fixes.",
+                            color = TextPrimary,
+                            fontSize = 14.sp
+                        )
+                        if (state.releaseNotes.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = state.releaseNotes.take(300),
+                                color = TextSecondary,
+                                fontSize = 12.sp,
+                                maxLines = 4,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.downloadAndInstallUpdate(state.downloadUrl) }) {
+                        Text("Update Now", color = CrunchyOrange, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.dismissUpdate() }) {
+                        Text("Later", color = TextSecondary)
+                    }
+                },
+                containerColor = SurfaceDark
+            )
+        }
+        is com.shinsei.anime.data.update.AppUpdateState.Downloading -> {
+            AlertDialog(
+                onDismissRequest = {},
+                title = {
+                    Text(
+                        text = "Downloading Update...",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                },
+                text = {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            color = CrunchyOrange,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "${(state.progress * 100).toInt()}% downloaded",
+                            color = TextSecondary,
+                            fontSize = 13.sp
+                        )
+                    }
+                },
+                confirmButton = {},
+                containerColor = SurfaceDark
+            )
+        }
+        is com.shinsei.anime.data.update.AppUpdateState.ReadyToInstall -> {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissUpdate() },
+                title = {
+                    Text(
+                        text = "Update Ready to Install",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Text(
+                        text = "The update has been downloaded. Tap below to launch the installer.",
+                        color = TextPrimary,
+                        fontSize = 14.sp
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val app = viewModel.getApplication<com.shinsei.anime.ShinseiApp>()
+                        app.updateManager.triggerInstall(state.apkFile)
+                    }) {
+                        Text("Install Now", color = CrunchyOrange, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.dismissUpdate() }) {
+                        Text("Dismiss", color = TextSecondary)
+                    }
+                },
+                containerColor = SurfaceDark
+            )
+        }
+        else -> Unit
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()

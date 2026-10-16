@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #08090a;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e2430;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #5f8bff;
+}
+
+/* Cyber Matrix Background Grid */
+.bg-cyber-grid {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(95, 139, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(95, 139, 255, 0.04) 1px, transparent 1px);
+}
+
+.bg-cyber-dots {
+  background-image: radial-gradient(rgba(95, 139, 255, 0.12) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Scanline effect */
+.scanline {
+  position: relative;
+  overflow: hidden;
+}
+.scanline::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+  z-index: 20;
+  background-size: 100% 3px, 6px 100%;
+  pointer-events: none;
+}
+
+/* Cyber Card Borders */
+.cyber-border {
+  position: relative;
+  background: #0f1319;
+  border: 1px solid rgba(95, 139, 255, 0.15);
+}
+.cyber-border:hover {
+  border-color: rgba(95, 139, 255, 0.4);
+}
+
+/* Corner bracket cuts */
+.cyber-corner {
+  position: relative;
+}
+.cyber-corner::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid #5f8bff;
+  border-right: 2px solid #5f8bff;
+  pointer-events: none;
+}
+.cyber-corner::before {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: -1px;
+  width: 8px;
+  height: 8px;
+  border-bottom: 2px solid #2bb673;
+  border-left: 2px solid #2bb673;
+  pointer-events: none;
+}
+
+/* Glow Utilities */
+.text-glow-cyan {
+  text-shadow: 0 0 12px rgba(95, 139, 255, 0.6);
+}
+.text-glow-green {
+  text-shadow: 0 0 12px rgba(43, 182, 115, 0.6);
+}
+.text-glow-purple {
+  text-shadow: 0 0 12px rgba(242, 91, 208, 0.6);
+}
+.text-glow-orange {
+  text-shadow: 0 0 12px rgba(255, 107, 0, 0.6);
+}

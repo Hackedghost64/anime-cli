@@ -19,6 +19,7 @@ class ShinseiApp : Application(), ImageLoaderFactory {
 
     val database by lazy { AppDatabase.getInstance(this) }
     val scriptRunner by lazy { ScriptRunner(this) }
+    val updateManager by lazy { com.shinsei.anime.data.update.UpdateManager(this, sharedOkHttpClient) }
 
     val sharedOkHttpClient: OkHttpClient by lazy {
         val dispatcher = Dispatcher().apply {

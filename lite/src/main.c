@@ -13,7 +13,7 @@
 #include "player.h"
 #include "history.h"
 
-#define VERSION "1.0.0"
+#define VERSION "1.2.0"
 
 static void print_help(void) {
     ui_banner();
@@ -26,6 +26,7 @@ static void print_help(void) {
     printf("  -d, --dub                Prefer English Dub server\n");
     printf("  -s, --sub                Prefer Japanese Sub server\n");
     printf("  -p, --player <name>      Player binary to use (default: mpv)\n");
+    printf("  -u, --update             Check for and install updates\n");
     printf("  -h, --help               Show this help message\n");
     printf("  -v, --version            Show version information\n\n");
     printf("Examples:\n");
@@ -71,6 +72,16 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
             printf("anime-lite %s (C Edition)\n", VERSION);
             return 0;
+        } else if (strcmp(argv[i], "-u") == 0 || strcmp(argv[i], "--update") == 0) {
+            ui_banner();
+            printf("Checking for updates...\n");
+            if (system("which anime-cli >/dev/null 2>&1") == 0) {
+                return system("anime-cli --update");
+            } else {
+                printf("To update anime-lite to the latest release, run:\n");
+                printf("  curl -fsSL https://raw.githubusercontent.com/Hackedghost64/anime-cli/main/install.sh | bash\n\n");
+                return 0;
+            }
         } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--continue") == 0) {
             continue_mode = 1;
         } else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--dub") == 0) {

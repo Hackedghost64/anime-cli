@@ -1,0 +1,85 @@
+name: Build & Release Shinsei Anime APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+    paths:
+      - 'android/**'
+      - 'config.json'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish as GitHub Release asset'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Build Shinsei Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle Cache
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Sync config.json to Android Assets
+        run: |
+          mkdir -p android/app/src/main/assets
+          cp config.json android/app/src/main/assets/config.json
+          echo "config.json synced into assets."
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
+
+      - name: Build Release APK with Gradle & R8
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Verify & Prepare APK Artifact
+        run: |
+          APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
+          if [ -f "$APK_PATH" ]; then
+            cp "$APK_PATH" ShinseiAnime-Release.apk
+            echo "APK built successfully:"
+            ls -lh ShinseiAnime-Release.apk
+          else
+            echo "Error: Output APK not found!"
+            exit 1
+          fi
+
+      - name: Upload APK as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShinseiAnime-Release
+          path: ShinseiAnime-Release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.publish_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ShinseiAnime-Release.apk
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
