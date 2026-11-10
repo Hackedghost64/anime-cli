@@ -6,7 +6,7 @@
 (function(exports) {
   'use strict';
 
-  exports.version = "1.6.0";
+  exports.version = "1.6.1";
 
   const _cfg = (typeof globalThis.APP_CONFIG === 'object' && globalThis.APP_CONFIG) || {};
   const ANILAB_BASE = (_cfg.anilab && _cfg.anilab.base_url) || "https://anilab2.amdapi.click/api";
@@ -23,7 +23,7 @@
   };
 
   const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
-  const M3U8_REGEX = new RegExp("https?://[^\\s\"'<>\\]+?\\.m3u8[^\\s\"'<>\\]*", "g");
+  const M3U8_REGEX = /https?:\/\/[^\s"'<>\\]+?\.m3u8[^\s"'<>\\]*/gi;
 
   // Unified HTTP Transport: works across Node.js fetch and Android QuickJS httpFetch
   async function requestText(url, options = {}) {
