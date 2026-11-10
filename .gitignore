@@ -43,6 +43,7 @@ lite/src/*.o
 lite/tests/*.o
 anime-lite-*
 .superpowers/
+.devrith/
 
 # Website Dependencies
 website/node_modules/

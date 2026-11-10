@@ -14,6 +14,7 @@ def test_proxy_ssrf_validation():
     assert not is_safe_proxy_url("ftp://server/file")
 
     # Safe external streams must be accepted
+    assert is_safe_proxy_url("https://api.kyotoplayer.com/stream")
     assert is_safe_proxy_url("https://app.kyotoplayer.com/api/v4/stream")
     assert is_safe_proxy_url("https://b1.xlsbox.com/master.m3u8")
 

@@ -23,6 +23,7 @@ setup(
         "proxy",
         "aniskip",
         "player",
+        "system",
         "user_routes",
     ],
     install_requires=[

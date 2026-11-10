@@ -30,12 +30,12 @@ os-version: 35 | app-id: com.xo.anilab
   {
     stage: 'STAGE 02 // RESOLUTION',
     title: 'Kyoto 1080p HLS Derivation',
-    subtitle: 'Direct Private Master Playlist HLS Handoff',
-    latency: '480 ms',
+    subtitle: 'HMAC-SHA256 Signed Stream Handshake',
+    latency: '180 ms',
     icon: <Zap className="w-5 h-5 text-[#ff640a]" />,
-    snippet: `POST /api/v4/post?id=1000003686 HTTP/2
-Host: app.kyotoplayer.com
-Referer: https://play.app/ | X-Requested-With: PLAY
+    snippet: `POST /stream id=1000003686&server=70219/jpn HTTP/2
+Host: api.kyotoplayer.com
+X-Kyoto-Sig: HMAC-SHA256 | app-version: 132
 [STREAM READY] -> master.m3u8 (1080p 6000kbps 60fps)`
   },
   {

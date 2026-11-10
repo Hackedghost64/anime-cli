@@ -10,18 +10,27 @@ export const TrinitySection: React.FC = () => {
   "anilab": {
     "base_url": "https://anilab2.amdapi.click/api",
     "headers": {
-      "User-Agent": "okhttp/4.12.0",
       "Accept": "application/json",
-      "os-version": "14",
-      "app-id": "com.shinsei.anime"
+      "Content-Type": "application/json",
+      "os-version": "35",
+      "app-id": "com.xo.anilab",
+      "app-version": "105",
+      "User-Agent": "okhttp/4.12.0"
     }
   },
   "kyoto": {
-    "base_url": "https://app.kyotoplayer.com/api/v4",
+    "base_url": "https://api.kyotoplayer.com",
     "headers": {
-      "User-Agent": "Mozilla/5.0 (Linux; Android 14; Pixel 8)",
+      "Accept": "application/json",
+      "os-version": "36",
+      "app-id": "com.kyotoplayer",
+      "app-version": "132",
+      "User-Agent": "okhttp/4.12.0"
+    },
+    "stream_headers": {
       "Referer": "https://play.app/",
-      "X-Requested-With": "PLAY"
+      "X-Requested-With": "PLAY",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
   }
 }`;

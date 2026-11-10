@@ -41,13 +41,12 @@ class Settings:
             "os-id": "",
             "User-Agent": "okhttp/4.12.0"
         }
-        default_kyoto_url = "https://app.kyotoplayer.com/api/v4"
+        default_kyoto_url = "https://api.kyotoplayer.com"
         default_kyoto_headers: Dict[str, str] = {
             "Accept": "application/json",
-            "Content-Type": "application/json",
-            "os-version": "35",
+            "os-version": "36",
             "app-id": "com.kyotoplayer",
-            "app-version": "126",
+            "app-version": "132",
             "User-Agent": "okhttp/4.12.0"
         }
         default_stream_headers: Dict[str, str] = {
