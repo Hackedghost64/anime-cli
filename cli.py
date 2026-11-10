@@ -7,6 +7,7 @@ Sub/Dub audio selector, and instant zero-config public tunneling.
 from __future__ import annotations
 import os
 import sys
+import json
 import time
 import socket
 import shutil
@@ -492,6 +493,97 @@ def cmd_update():
         cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "--user", f"git+https://github.com/{GITHUB_REPO}.git"]
         subprocess.run(cmd)
         print(f"\n{C_GREEN}{C_BOLD}✓ anime-cli upgraded via pip!{C_RESET}\n")
+
+# -----------------------------------------------------------------------------
+# COMMAND: clear-data (Clear all saved progress, history, watchlist, and cache)
+# -----------------------------------------------------------------------------
+def cmd_clear_data(force: bool = False):
+    banner()
+    print(f"{C_BOLD}🗑️  Clear All Saved CLI Player Data{C_RESET}\n")
+    print("This will permanently remove:")
+    print(f"  • {C_CYAN}Watch History & Resume Progress{C_RESET} (anime-cli & anime-lite)")
+    print(f"  • {C_CYAN}Watchlist Entries{C_RESET}")
+    print(f"  • {C_CYAN}Update & Network Cache Files{C_RESET}")
+    print(f"  • {C_CYAN}Temporary Player Session Files{C_RESET}\n")
+
+    if not force:
+        try:
+            confirm = input(f"{C_YELLOW}Are you sure you want to proceed? [y/N]: {C_RESET}").strip().lower()
+            if confirm not in ("y", "yes"):
+                print(f"{C_DIM}Action cancelled. No data was deleted.{C_RESET}\n")
+                return
+        except (KeyboardInterrupt, EOFError):
+            print(f"\n{C_DIM}Action cancelled.{C_RESET}\n")
+            return
+
+    cleared = []
+
+    # 1. Reset / Clear DB records
+    try:
+        import db
+        counts = asyncio.run(db.clear_all_data())
+        cleared.append(f"Cleared database tables (watch_progress: {counts.get('watch_progress', 0)}, watchlist: {counts.get('watchlist', 0)})")
+    except Exception:
+        pass
+
+    # 2. Files to remove in XDG_DATA_HOME/anime-cli and ~/.local/share/anime-cli
+    user_data_dir = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
+    data_dirs = [
+        os.path.join(user_data_dir, "anime-cli"),
+        os.path.expanduser("~/.local/share/anime-cli")
+    ]
+    seen_dirs = set()
+    for d in data_dirs:
+        abs_d = os.path.abspath(d)
+        if abs_d in seen_dirs or not os.path.isdir(abs_d):
+            continue
+        seen_dirs.add(abs_d)
+
+        files_to_remove = ["anime.db", "anime.db-wal", "anime.db-shm", "history.json", "update_cache.json"]
+        for fname in files_to_remove:
+            fpath = os.path.join(abs_d, fname)
+            if os.path.exists(fpath):
+                try:
+                    os.remove(fpath)
+                    cleared.append(f"Removed {fname} ({fpath})")
+                except Exception:
+                    pass
+
+    # Reset DB state so subsequent operations reinitialize cleanly
+    try:
+        import db
+        db.reset_db_state()
+    except Exception:
+        pass
+
+    # 3. Clean any temp files from /tmp
+    import glob
+    import tempfile
+    temp_dir = tempfile.gettempdir()
+    temp_patterns = [
+        os.path.join(temp_dir, "anime_cli_prog_*"),
+        os.path.join(temp_dir, "anime_cli_mpv_*"),
+        os.path.join(temp_dir, "anime_lite_prog_*"),
+        os.path.join(temp_dir, "anime_lite_mpv_*"),
+    ]
+    temp_count = 0
+    for pattern in temp_patterns:
+        for tfile in glob.glob(pattern):
+            try:
+                os.remove(tfile)
+                temp_count += 1
+            except Exception:
+                pass
+    if temp_count > 0:
+        cleared.append(f"Cleaned {temp_count} temporary player session file(s)")
+
+    print(f"\n{C_GREEN}✓ Successfully cleared all saved CLI player data:{C_RESET}")
+    if cleared:
+        for item in cleared:
+            print(f"  • {item}")
+    else:
+        print(f"  • No existing saved data files were found (already clean).")
+    print(f"\n{C_BOLD}Your CLI players are now in a fresh state.{C_RESET}\n")
 
 # -----------------------------------------------------------------------------
 # COMMAND: build-apk (Build Shinsei Android APK with Gradle & Optional ADB Install)
@@ -1074,6 +1166,7 @@ def show_help():
     row("anime-cli -o, --download [title]", "Batch download 1080p MP4 via FFmpeg")
     row("anime-cli --config-player", "Select preferred player (MPV, VLC, Termux, etc.)")
     row("anime-cli --player <name>", "Override player (mpv, vlc, mpv-android, etc.)")
+    row("anime-cli --clear-data", "Clear all saved history, progress & cache")
     row("anime-cli -d, --dub", "Prefer English Dub audio servers")
     row("anime-cli --sub", "Prefer Japanese Sub audio servers")
     row("anime-cli help, -h", "Display this interactive help manual")
@@ -1118,6 +1211,7 @@ async def interactive_menu():
             "▶ Continue Watching (Resume last episode)",
             "📥 Download Episode (1080p MP4 via FFmpeg)",
             "🎬 Configure Video Player (--config-player)",
+            "🗑️ Clear All Saved Data (--clear-data)",
             "❓ Help & Shortcuts Guide",
             "❌ Exit"
         ]
@@ -1161,6 +1255,12 @@ async def interactive_menu():
             except (KeyboardInterrupt, EOFError):
                 break
         elif sel == 9:
+            cmd_clear_data()
+            try:
+                input(f"\n{C_ORANGE}Press Enter to return to menu...{C_RESET}")
+            except (KeyboardInterrupt, EOFError):
+                break
+        elif sel == 10:
             show_help()
             try:
                 input(f"\n{C_ORANGE}Press Enter to return to menu...{C_RESET}")
@@ -1203,6 +1303,8 @@ def main():
     parser.add_argument("-d", "--dub", action="store_true", help="Prefer English Dub audio")
     parser.add_argument("--sub", action="store_true", help="Prefer Japanese Sub audio")
     parser.add_argument("-o", "--download", action="store_true", help="Download episode in 1080p MP4 via FFmpeg")
+    parser.add_argument("--clear-data", "--clear", dest="clear_data", action="store_true", help="Clear all saved watch progress, history, watchlist, and cache for anime-cli & anime-lite")
+    parser.add_argument("-y", "--yes", dest="assume_yes", action="store_true", help="Automatic yes to confirmation prompts (e.g. for --clear-data)")
     parser.add_argument("--player", type=str, default=None, help="Preferred player override (mpv, vlc, mpv-android, just-player, etc.)")
     parser.add_argument("--config-player", dest="config_player", action="store_true", help="Interactively choose preferred video player")
     parser.add_argument("-p", "--port", type=int, default=8088, help="Server port (default: 8088)")
@@ -1249,6 +1351,8 @@ def main():
         cmd_build_apk(release=not args.debug, install=args.install)
     elif args.update or (args.query in ("update", "upgrade", "--update")):
         cmd_update()
+    elif args.clear_data or (args.query in ("clear-data", "clear", "--clear-data", "--clear")):
+        cmd_clear_data(force=args.assume_yes)
     elif args.server or args.query in ("server", "serve", "stream"):
         cmd_stream(port=args.port, keep_awake=args.keep_awake)
     elif args.binge or (args.query == "binge"):

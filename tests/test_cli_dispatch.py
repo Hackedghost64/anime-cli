@@ -43,3 +43,44 @@ def test_sync_flag_dispatches_to_cmd_sync(monkeypatch):
     assert len(called) == 2
     assert called[1] == 8088
 
+def test_clear_data_flag_dispatches_to_cmd_clear_data(monkeypatch):
+    import cli
+    called = []
+    def mock_cmd_clear_data(force=False):
+        called.append(force)
+    monkeypatch.setattr(cli, "cmd_clear_data", mock_cmd_clear_data)
+
+    sys.argv = ["anime-cli", "--clear-data", "-y"]
+    cli.main()
+    assert len(called) == 1
+    assert called[0] is True
+
+    sys.argv = ["anime-cli", "clear"]
+    cli.main()
+    assert len(called) == 2
+    assert called[1] is False
+
+@pytest.mark.asyncio
+async def test_db_clear_all_data():
+    import db
+    # Save a progress item
+    await db.save_progress(
+        anime_id="99999",
+        ep_id="11111",
+        position=120.0,
+        duration=1400.0,
+        anime_title="Test Anime",
+        ep_num="1"
+    )
+    res = await db.get_anime_progress("99999")
+    assert "11111" in res
+
+    # Clear all data
+    counts = await db.clear_all_data()
+    assert counts["watch_progress"] >= 1
+
+    # Verify progress table is now empty for that anime
+    after = await db.get_anime_progress("99999")
+    assert len(after) == 0
+
+

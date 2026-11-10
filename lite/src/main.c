@@ -26,6 +26,7 @@ static void print_help(void) {
     printf("  -d, --dub                Prefer English Dub server\n");
     printf("  -s, --sub                Prefer Japanese Sub server\n");
     printf("  -p, --player <name>      Player binary to use (default: mpv)\n");
+    printf("  -C, --clear-data         Clear all saved watch history, progress, and cache\n");
     printf("  -u, --update             Check for and install updates\n");
     printf("  -h, --help               Show this help message\n");
     printf("  -v, --version            Show version information\n\n");
@@ -82,6 +83,17 @@ int main(int argc, char **argv) {
                 printf("  curl -fsSL https://raw.githubusercontent.com/Hackedghost64/anime-cli/main/install.sh | bash\n\n");
                 return 0;
             }
+        } else if (strcmp(argv[i], "-C") == 0 || strcmp(argv[i], "--clear-data") == 0 || strcmp(argv[i], "--clear") == 0 || strcmp(argv[i], "clear") == 0) {
+            ui_banner();
+            printf("%s%s🗑️  Clear All Saved CLI Player Data%s\n\n", C_BOLD, C_RED, C_RESET);
+            printf("Clearing watch history, resume progress, and cache files...\n");
+            int count = history_clear_all_data();
+            if (count > 0) {
+                printf("\n%s%s✓ Successfully cleared %d saved data file(s).%s\n\n", C_BOLD, C_GREEN, count, C_RESET);
+            } else {
+                printf("\n%s%s✓ No existing saved data files found (already clean).%s\n\n", C_BOLD, C_GREEN, C_RESET);
+            }
+            return 0;
         } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--continue") == 0) {
             continue_mode = 1;
         } else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--dub") == 0) {

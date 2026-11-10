@@ -155,3 +155,47 @@ int history_load_latest(WatchHistory *h) {
     }
     return 0;
 }
+
+int history_clear(void) {
+    const char *filepath = history_get_file_path();
+    if (access(filepath, F_OK) == 0) {
+        return unlink(filepath);
+    }
+    return 0;
+}
+
+int history_clear_all_data(void) {
+    int count = 0;
+    const char *filepath = history_get_file_path();
+    if (access(filepath, F_OK) == 0) {
+        if (unlink(filepath) == 0) {
+            printf("  • Removed %s\n", filepath);
+            count++;
+        }
+    }
+
+    char dir[1024];
+    snprintf(dir, sizeof(dir), "%s", filepath);
+    char *last_slash = strrchr(dir, '/');
+    if (last_slash) {
+        *last_slash = '\0';
+        const char *files[] = {
+            "anime.db",
+            "anime.db-wal",
+            "anime.db-shm",
+            "update_cache.json"
+        };
+        for (size_t i = 0; i < sizeof(files) / sizeof(files[0]); i++) {
+            char target[2048];
+            snprintf(target, sizeof(target), "%s/%s", dir, files[i]);
+            if (access(target, F_OK) == 0) {
+                if (unlink(target) == 0) {
+                    printf("  • Removed %s\n", target);
+                    count++;
+                }
+            }
+        }
+    }
+    return count;
+}
+

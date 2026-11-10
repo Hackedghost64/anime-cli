@@ -20,5 +20,7 @@ typedef struct {
 const char *history_get_file_path(void);
 int history_save(const WatchHistory *h);
 int history_load_latest(WatchHistory *h);
+int history_clear(void);
+int history_clear_all_data(void);
 
 #endif // ANIME_LITE_HISTORY_H

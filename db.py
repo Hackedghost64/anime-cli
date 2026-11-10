@@ -297,3 +297,23 @@ async def merge_watchlist_deltas(deltas: List[Dict[str, Any]], client_timestamp:
                 updated_count += 1
         await db.commit()
     return updated_count
+
+async def clear_all_data() -> Dict[str, int]:
+    """Delete all records from watch_progress and watchlist tables, and vacuum database."""
+    async with get_db() as db:
+        cur1 = await db.execute("DELETE FROM watch_progress")
+        prog_count = cur1.rowcount
+        cur2 = await db.execute("DELETE FROM watchlist")
+        wl_count = cur2.rowcount
+        await db.commit()
+        try:
+            await db.execute("VACUUM")
+        except Exception:
+            pass
+    return {"watch_progress": max(0, prog_count), "watchlist": max(0, wl_count)}
+
+def reset_db_state() -> None:
+    """Reset internal initialization flag so database can be re-initialized after deletion."""
+    global _initialized
+    _initialized = False
+

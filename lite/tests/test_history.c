@@ -42,6 +42,19 @@ int main(void) {
     assert(loaded.position == wh.position);
     assert(loaded.duration == wh.duration);
 
+    // Test history_clear()
+    int c_res = history_clear();
+    assert(c_res == 0);
+    WatchHistory after_clear;
+    assert(history_load_latest(&after_clear) != 0);
+
+    // Test history_clear_all_data()
+    assert(history_save(&wh) == 0);
+    assert(history_load_latest(&loaded) == 0);
+    int all_res = history_clear_all_data();
+    assert(all_res >= 1);
+    assert(history_load_latest(&after_clear) != 0);
+
     printf("test_history: ALL TESTS PASSED\n");
     return 0;
 }
