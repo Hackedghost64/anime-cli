@@ -3,6 +3,7 @@
 #include "http.h"
 #include "cJSON.h"
 #include "config.h"
+#include "crypto.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,8 +11,7 @@
 #include <regex.h>
 #include <ctype.h>
 
-static char g_servers_template[512] = "https://play.anidb.app/api/episode/%id%/servers";
-static char g_iframe_template[512] = "https://play.anidb.app/api/episode/%id%/iframe";
+static long long g_current_anime_id = 0;
 
 static int get_anilab_headers(const char **out_hdrs, int max) {
     const AppConfig *cfg = config_get();
@@ -20,48 +20,6 @@ static int get_anilab_headers(const char **out_hdrs, int max) {
         out_hdrs[i] = cfg->anilab_headers[i];
     }
     return n;
-}
-
-static int get_kyoto_headers(const char **out_hdrs, int max) {
-    const AppConfig *cfg = config_get();
-    int n = cfg->kyoto_header_count < max ? cfg->kyoto_header_count : max;
-    for (int i = 0; i < n; i++) {
-        out_hdrs[i] = cfg->kyoto_headers[i];
-    }
-    return n;
-}
-
-static int get_stream_headers(const char **out_hdrs, int max) {
-    const AppConfig *cfg = config_get();
-    int n = cfg->stream_header_count < max ? cfg->stream_header_count : max;
-    for (int i = 0; i < n; i++) {
-        out_hdrs[i] = cfg->stream_headers[i];
-    }
-    return n;
-}
-
-static void str_replace_pattern(char *dest, size_t dest_size, const char *src, const char *pattern, const char *replacement) {
-    const char *pos = strstr(src, pattern);
-    if (!pos) {
-        snprintf(dest, dest_size, "%s", src);
-        return;
-    }
-    size_t prefix_len = pos - src;
-    snprintf(dest, dest_size, "%.*s%s%s", (int)prefix_len, src, replacement, pos + strlen(pattern));
-}
-
-static void format_endpoint_url(char *dest, size_t dest_size, const char *template_str, const char *id_val) {
-    char temp[512];
-    if (strstr(template_str, "%id%")) {
-        str_replace_pattern(temp, sizeof(temp), template_str, "%id%", id_val);
-    } else if (strstr(template_str, "{id}")) {
-        str_replace_pattern(temp, sizeof(temp), template_str, "{id}", id_val);
-    } else if (strstr(template_str, "%s")) {
-        snprintf(temp, sizeof(temp), template_str, id_val);
-    } else {
-        snprintf(temp, sizeof(temp), "%s", template_str);
-    }
-    snprintf(dest, dest_size, "%s", temp);
 }
 
 static const char *map_lang_flag(const char *code) {
@@ -187,69 +145,29 @@ int api_get_episodes(long long anime_id, EpisodeItem **out_episodes, int *out_co
     if (!out_episodes || !out_count) return -1;
     *out_episodes = NULL;
     *out_count = 0;
+    g_current_anime_id = anime_id;
 
-    char kyoto_url[512];
-    snprintf(kyoto_url, sizeof(kyoto_url), "%s/post?id=%lld", config_get()->kyoto_base_url, anime_id);
+    char url[512];
+    snprintf(url, sizeof(url), "%s/episodes", config_get()->kyoto_base_url);
 
-    const char *k_hdrs[16];
-    int k_hdr_count = get_kyoto_headers(k_hdrs, 16);
+    char body[128];
+    snprintf(body, sizeof(body), "id=%lld", anime_id);
 
-    HttpResponse k_res = http_get(kyoto_url, k_hdrs, k_hdr_count);
-    if (k_res.status_code != 200 || !k_res.data) {
-        http_response_free(&k_res);
+    char hdr_buf[16][256];
+    const char *hdrs[16];
+    int hdr_count = 0;
+    if (kyoto_sign_request("POST", "/episodes", body, hdr_buf, hdrs, &hdr_count) != 0) {
         return -1;
     }
 
-    cJSON *k_root = cJSON_Parse(k_res.data);
-    http_response_free(&k_res);
-    if (!k_root) return -1;
-
-    // Cache servers route template
-    cJSON *servers_item = cJSON_GetObjectItemCaseSensitive(k_root, "servers");
-    if (servers_item && cJSON_IsString(servers_item) && servers_item->valuestring) {
-        strncpy(g_servers_template, servers_item->valuestring, sizeof(g_servers_template) - 1);
-    }
-
-    // Cache iframe route template
-    cJSON *srv_obj = cJSON_GetObjectItemCaseSensitive(k_root, "server");
-    if (srv_obj) {
-        if (cJSON_IsString(srv_obj) && srv_obj->valuestring) {
-            strncpy(g_iframe_template, srv_obj->valuestring, sizeof(g_iframe_template) - 1);
-        } else if (cJSON_IsObject(srv_obj)) {
-            cJSON *srv_url = cJSON_GetObjectItemCaseSensitive(srv_obj, "url");
-            if (srv_url && cJSON_IsString(srv_url) && srv_url->valuestring) {
-                strncpy(g_iframe_template, srv_url->valuestring, sizeof(g_iframe_template) - 1);
-            }
-        }
-    }
-
-    cJSON *ep_url_item = cJSON_GetObjectItemCaseSensitive(k_root, "episodes");
-    if (!ep_url_item || !cJSON_IsString(ep_url_item) || !ep_url_item->valuestring) {
-        cJSON_Delete(k_root);
+    HttpResponse res = http_post(url, body, hdrs, hdr_count);
+    if (res.status_code != 200 || !res.data) {
+        http_response_free(&res);
         return -1;
     }
 
-    char ep_url_raw[512];
-    strncpy(ep_url_raw, ep_url_item->valuestring, sizeof(ep_url_raw) - 1);
-    cJSON_Delete(k_root);
-
-    char anime_id_str[32];
-    snprintf(anime_id_str, sizeof(anime_id_str), "%lld", anime_id);
-
-    char final_ep_url[512];
-    format_endpoint_url(final_ep_url, sizeof(final_ep_url), ep_url_raw, anime_id_str);
-
-    const char *st_hdrs[16];
-    int st_hdr_count = get_stream_headers(st_hdrs, 16);
-
-    HttpResponse ep_res = http_get(final_ep_url, st_hdrs, st_hdr_count);
-    if (ep_res.status_code != 200 || !ep_res.data) {
-        http_response_free(&ep_res);
-        return -1;
-    }
-
-    cJSON *ep_root = cJSON_Parse(ep_res.data);
-    http_response_free(&ep_res);
+    cJSON *ep_root = cJSON_Parse(res.data);
+    http_response_free(&res);
     if (!ep_root) return -1;
 
     cJSON *list = cJSON_GetObjectItemCaseSensitive(ep_root, "list");
@@ -314,13 +232,20 @@ int api_get_servers(const char *ep_id, ServerItem **out_servers, int *out_count)
     *out_servers = NULL;
     *out_count = 0;
 
-    char servers_url[512];
-    format_endpoint_url(servers_url, sizeof(servers_url), g_servers_template, ep_id);
+    char url[512];
+    snprintf(url, sizeof(url), "%s/servers", config_get()->kyoto_base_url);
 
-    const char *st_hdrs[16];
-    int st_hdr_count = get_stream_headers(st_hdrs, 16);
+    char body[256];
+    snprintf(body, sizeof(body), "id=%lld&episode=%s", g_current_anime_id, ep_id);
 
-    HttpResponse res = http_get(servers_url, st_hdrs, st_hdr_count);
+    char hdr_buf[16][256];
+    const char *hdrs[16];
+    int hdr_count = 0;
+    if (kyoto_sign_request("POST", "/servers", body, hdr_buf, hdrs, &hdr_count) != 0) {
+        return -1;
+    }
+
+    HttpResponse res = http_post(url, body, hdrs, hdr_count);
     if (res.status_code != 200 || !res.data) {
         http_response_free(&res);
         return -1;
@@ -401,13 +326,20 @@ int api_resolve_stream(const char *server_id, StreamResult *out_stream) {
     if (!server_id || !out_stream) return -1;
     memset(out_stream, 0, sizeof(StreamResult));
 
-    char iframe_url[512];
-    format_endpoint_url(iframe_url, sizeof(iframe_url), g_iframe_template, server_id);
+    char url[512];
+    snprintf(url, sizeof(url), "%s/stream", config_get()->kyoto_base_url);
 
-    const char *st_hdrs[16];
-    int st_hdr_count = get_stream_headers(st_hdrs, 16);
+    char body[512];
+    snprintf(body, sizeof(body), "id=%lld&server=%s", g_current_anime_id, server_id);
 
-    HttpResponse res = http_get(iframe_url, st_hdrs, st_hdr_count);
+    char hdr_buf[16][256];
+    const char *hdrs[16];
+    int hdr_count = 0;
+    if (kyoto_sign_request("POST", "/stream", body, hdr_buf, hdrs, &hdr_count) != 0) {
+        return -1;
+    }
+
+    HttpResponse res = http_post(url, body, hdrs, hdr_count);
     if (res.status_code != 200 || !res.data) {
         http_response_free(&res);
         return -1;

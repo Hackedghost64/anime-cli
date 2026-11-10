@@ -2,7 +2,7 @@ CC ?= gcc
 CFLAGS ?= -std=c99 -Wall -Wextra -O2 -Iinclude -Isrc
 LDFLAGS ?= $(shell pkg-config --libs libcurl 2>/dev/null || echo "-lcurl")
 
-SRCS = src/cJSON.c src/http.c src/config.c src/api.c src/ui.c src/player.c src/history.c
+SRCS = src/cJSON.c src/crypto.c src/http.c src/config.c src/api.c src/ui.c src/player.c src/history.c
 OBJS = $(SRCS:.c=.o)
 TARGET = bin/anime-lite
 
@@ -29,8 +29,8 @@ test_config: bin src/cJSON.o src/config.o
 	$(CC) $(CFLAGS) tests/test_config.c src/cJSON.o src/config.o -o bin/test_config
 	./bin/test_config
 
-test_api: bin src/cJSON.o src/http.o src/config.o src/api.o
-	$(CC) $(CFLAGS) tests/test_api.c src/cJSON.o src/http.o src/config.o src/api.o $(LDFLAGS) -o bin/test_api
+test_api: bin src/cJSON.o src/crypto.o src/http.o src/config.o src/api.o
+	$(CC) $(CFLAGS) tests/test_api.c src/cJSON.o src/crypto.o src/http.o src/config.o src/api.o $(LDFLAGS) -o bin/test_api
 	./bin/test_api
 
 test_ui: bin src/ui.o

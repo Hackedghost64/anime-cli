@@ -103,6 +103,64 @@ HttpResponse http_get(const char *url, const char **headers, int header_count) {
     return resp;
 }
 
+HttpResponse http_post(const char *url, const char *body, const char **headers, int header_count) {
+    HttpResponse resp;
+    memset(&resp, 0, sizeof(HttpResponse));
+
+    CURL *curl = curl_easy_init();
+    if (!curl) {
+        snprintf(resp.error, sizeof(resp.error), "Failed to initialize curl");
+        return resp;
+    }
+
+    MemoryChunk chunk;
+    chunk.memory = malloc(1);
+    chunk.size = 0;
+    if (chunk.memory) {
+        chunk.memory[0] = '\0';
+    }
+
+    struct curl_slist *header_list = NULL;
+    for (int i = 0; i < header_count; i++) {
+        if (headers && headers[i]) {
+            header_list = curl_slist_append(header_list, headers[i]);
+        }
+    }
+
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_POST, 1L);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body ? body : "");
+    if (header_list) {
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
+    }
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "okhttp/4.12.0");
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+
+    CURLcode res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+        snprintf(resp.error, sizeof(resp.error), "%s", curl_easy_strerror(res));
+        free(chunk.memory);
+        resp.data = NULL;
+        resp.size = 0;
+        resp.status_code = 0;
+    } else {
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &resp.status_code);
+        resp.data = chunk.memory;
+        resp.size = chunk.size;
+    }
+
+    if (header_list) {
+        curl_slist_free_all(header_list);
+    }
+    curl_easy_cleanup(curl);
+    return resp;
+}
+
 void http_response_free(HttpResponse *res) {
     if (res && res->data) {
         free(res->data);

@@ -13,6 +13,7 @@ typedef struct {
 void http_init(void);
 void http_cleanup(void);
 HttpResponse http_get(const char *url, const char **headers, int header_count);
+HttpResponse http_post(const char *url, const char *body, const char **headers, int header_count);
 char *http_url_encode(const char *str);
 void http_response_free(HttpResponse *res);
 

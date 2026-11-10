@@ -2,6 +2,7 @@ package com.shinsei.anime.engine
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.util.Base64
 import com.shinsei.anime.ShinseiApp
 import android.os.Handler
 import android.os.Looper
@@ -27,9 +28,14 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.InputStreamReader
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 
 class ScriptRunner(private val context: Context) {
 
@@ -106,6 +112,62 @@ class ScriptRunner(private val context: Context) {
             val resp = okHttpClient.newCall(reqBuilder.build()).execute()
             return resp.use { response ->
                 response.body?.string() ?: ""
+            }
+        }
+
+        @JavascriptInterface
+        fun kyotoPostSync(endpoint: String, formBody: String): String {
+            try {
+                val ts = (System.currentTimeMillis() / 1000).toString()
+                val nonceBytes = ByteArray(16).apply { SecureRandom().nextBytes(this) }
+                val nonce = Base64.encodeToString(nonceBytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+                val path = "/" + endpoint.trimStart('/')
+
+                val md = MessageDigest.getInstance("SHA-256")
+                val bodySha = md.digest(formBody.toByteArray(StandardCharsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
+                val payload = "POST\n$path\n$bodySha\n$ts\n$nonce\n132"
+                val certHex = "482a900b2906766b2e8d3cf19fcf6d06d0b6c9569cb6305c9c43200a8e20979e"
+                val secretHex = "9589ba06efeb990bafe302235854766f4d5b9cabcb57ad6ad6bb41cd7b6a8408"
+
+                fun hexToBytes(hex: String): ByteArray =
+                    ByteArray(hex.length / 2) { i -> hex.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
+
+                val keyHmac = Mac.getInstance("HmacSHA256").apply {
+                    init(SecretKeySpec(hexToBytes(secretHex), "HmacSHA256"))
+                }
+                val signingKey = keyHmac.doFinal(hexToBytes(certHex))
+
+                val mac = Mac.getInstance("HmacSHA256").apply {
+                    init(SecretKeySpec(signingKey, "HmacSHA256"))
+                }
+                val sig = mac.doFinal(payload.toByteArray(StandardCharsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
+                val mediaType = "application/x-www-form-urlencoded".toMediaTypeOrNull()
+                val reqBody = formBody.toRequestBody(mediaType)
+
+                val req = Request.Builder()
+                    .url("https://api.kyotoplayer.com$path")
+                    .header("Accept", "application/json")
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .header("os-version", "36")
+                    .header("app-id", "com.kyotoplayer")
+                    .header("app-version", "132")
+                    .header("device-model", "Google Pixel 8")
+                    .header("X-Kyoto-Ts", ts)
+                    .header("X-Kyoto-Nonce", nonce)
+                    .header("X-Kyoto-Sig", sig)
+                    .header("X-Kyoto-Cert", certHex)
+                    .header("User-Agent", "okhttp/4.12.0")
+                    .post(reqBody)
+                    .build()
+
+                return okHttpClient.newCall(req).execute().use { response ->
+                    response.body?.string() ?: ""
+                }
+            } catch (e: Exception) {
+                Log.e(tag, "kyotoPostSync failed for $endpoint", e)
+                return "{}"
             }
         }
     }
@@ -231,7 +293,10 @@ class ScriptRunner(private val context: Context) {
                 val cached = hotScriptFile.readText()
                 val bundledVer = extractVersion(bundled)
                 val cachedVer = extractVersion(cached)
-                if (isNewerVersion(cachedVer, bundledVer)) {
+                if (cached.contains("app.kyotoplayer.com") || cached.contains("play.anidb.app")) {
+                    Log.i(tag, "Purging deprecated legacy OTA cached script")
+                    hotScriptFile.delete()
+                } else if (isNewerVersion(cachedVer, bundledVer)) {
                     Log.i(tag, "Using newer OTA cached script v$cachedVer (bundled is v$bundledVer)")
                     prefs.edit().putString("active_bundle_version", cachedVer).apply()
                     return cached

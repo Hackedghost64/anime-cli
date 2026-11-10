@@ -14,7 +14,7 @@ static void set_default_config(AppConfig *cfg) {
     memset(cfg, 0, sizeof(AppConfig));
 
     snprintf(cfg->anilab_base_url, sizeof(cfg->anilab_base_url), "https://anilab2.amdapi.click/api");
-    snprintf(cfg->kyoto_base_url, sizeof(cfg->kyoto_base_url), "https://app.kyotoplayer.com/api/v4");
+    snprintf(cfg->kyoto_base_url, sizeof(cfg->kyoto_base_url), "https://api.kyotoplayer.com");
 
     // Anilab default headers
     snprintf(cfg->anilab_headers[0], 256, "Accept: application/json");
@@ -153,6 +153,10 @@ void config_init(void) {
     const char *env_kyoto = getenv("KYOTO_BASE_URL");
     if (env_kyoto && env_kyoto[0] != '\0') {
         snprintf(g_config.kyoto_base_url, sizeof(g_config.kyoto_base_url), "%s", env_kyoto);
+    }
+
+    if (strstr(g_config.kyoto_base_url, "app.kyotoplayer.com") != NULL) {
+        snprintf(g_config.kyoto_base_url, sizeof(g_config.kyoto_base_url), "https://api.kyotoplayer.com");
     }
 
     g_config_initialized = 1;

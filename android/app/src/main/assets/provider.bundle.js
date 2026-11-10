@@ -6,11 +6,11 @@
 (function(exports) {
   'use strict';
 
-  exports.version = "1.5.1";
+  exports.version = "1.6.0";
 
   const _cfg = (typeof globalThis.APP_CONFIG === 'object' && globalThis.APP_CONFIG) || {};
   const ANILAB_BASE = (_cfg.anilab && _cfg.anilab.base_url) || "https://anilab2.amdapi.click/api";
-  const KYOTO_BASE = (_cfg.kyoto && _cfg.kyoto.base_url) || "https://app.kyotoplayer.com/api/v4";
+  const KYOTO_BASE = (_cfg.kyoto && _cfg.kyoto.base_url) || "https://api.kyotoplayer.com";
   const ANISKIP_BASE = (_cfg.aniskip && _cfg.aniskip.base_url) || "https://api.aniskip.com/v2";
 
   const DEFAULT_HEADERS = (_cfg.anilab && _cfg.anilab.headers) || {
@@ -23,7 +23,7 @@
   };
 
   const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
-  const M3U8_REGEX = /https?:\/\/[^\s"'<>\\]+?\.m3u8[^\s"'<>\\]*/g;
+  const M3U8_REGEX = new RegExp("https?://[^\\s\"'<>\\]+?\\.m3u8[^\\s\"'<>\\]*", "g");
 
   // Unified HTTP Transport: works across Node.js fetch and Android QuickJS httpFetch
   async function requestText(url, options = {}) {
@@ -292,22 +292,21 @@
     }
   };
 
+  async function kyotoPost(endpoint, formBody) {
+    if (typeof globalThis.AndroidBridge === 'object' && typeof globalThis.AndroidBridge.kyotoPostSync === 'function') {
+      const res = globalThis.AndroidBridge.kyotoPostSync(endpoint, formBody);
+      return typeof res === 'string' && res ? JSON.parse(res) : (res || {});
+    }
+    return {};
+  }
+
   /**
    * 4. Fetch Episode List
    */
   exports.getEpisodes = async function(animeId) {
     if (!animeId) return [];
     try {
-      const routes = await getKyotoRoutes(animeId);
-      const epUrl = routes.episodes.replace("%id%", String(animeId)).replace("{id}", String(animeId));
-      const headers = {
-        ...DEFAULT_HEADERS,
-        ...routes.extraHeaders,
-        "Referer": "https://play.app/",
-        "X-Requested-With": "PLAY",
-        "User-Agent": BROWSER_UA
-      };
-      const data = await requestJson(epUrl, { headers });
+      const data = await kyotoPost("/episodes", `id=${encodeURIComponent(animeId)}`);
       const list = data.list || [];
       return list.map(e => ({
         id: String(e.id),
@@ -325,16 +324,7 @@
   exports.getServers = async function(animeId, epId) {
     if (!animeId || !epId) return [];
     try {
-      const routes = await getKyotoRoutes(animeId);
-      const srvUrl = routes.servers.replace("%id%", String(epId));
-      const headers = {
-        ...DEFAULT_HEADERS,
-        ...routes.extraHeaders,
-        "Referer": "https://play.app/",
-        "X-Requested-With": "PLAY",
-        "User-Agent": BROWSER_UA
-      };
-      const data = await requestJson(srvUrl, { headers });
+      const data = await kyotoPost("/servers", `id=${encodeURIComponent(animeId)}&episode=${encodeURIComponent(epId)}`);
       const list = data.list || [];
       return list.map(s => {
         const language = String(s.lang || '').trim().toLowerCase();
@@ -355,26 +345,14 @@
    */
   exports.resolveStream = async function(animeId, serverId) {
     if (!animeId || !serverId) throw new Error("Missing animeId or serverId");
-    const routes = await getKyotoRoutes(animeId);
-    const iframeUrl = routes.iframe.replace("%id%", String(serverId));
-    const headers = {
-      ...DEFAULT_HEADERS,
-      ...routes.extraHeaders,
-      "Referer": "https://play.app/",
-      "X-Requested-With": "PLAY",
-      "User-Agent": BROWSER_UA
-    };
-
-    // Step 1: Query embed link
-    const data = await requestJson(iframeUrl, { headers });
+    const data = await kyotoPost("/stream", `id=${encodeURIComponent(animeId)}&server=${encodeURIComponent(serverId)}`);
     const link = data.link;
-    if (!link) throw new Error(`Embedder returned no link for server ${serverId}`);
+    if (!link) throw new Error(`Kyoto stream endpoint returned no link for server ${serverId}`);
 
     if (link.toLowerCase().includes('.m3u8')) {
       return { url: link, headers: { "Referer": "https://play.app/", "User-Agent": BROWSER_UA } };
     }
 
-    // Step 2: Fetch embed HTML and scrape .m3u8 URL
     const html = await requestText(link, { headers: { "Referer": "https://play.app/", "User-Agent": BROWSER_UA } });
     const matches = html.match(M3U8_REGEX);
     if (!matches || !matches.length) throw new Error("No .m3u8 streams found in embed player HTML");
@@ -503,32 +481,6 @@
   // Aliases for unified SDK contract
   exports.getHome = exports.getHomeFeed;
   exports.getDetails = exports.getPost;
-
-  // Helper Utilities
-  async function getKyotoRoutes(postId) {
-    const data = await requestJson(`${KYOTO_BASE}/post?id=${encodeURIComponent(postId)}`, {
-      headers: DEFAULT_HEADERS
-    });
-    const epUrl = typeof data.episodes === 'string' ? data.episodes : null;
-    const svUrl = typeof data.servers === 'string' ? data.servers : null;
-    let ifUrl = null;
-    const extraHeaders = {};
-
-    if (typeof data.server === 'string') {
-      ifUrl = data.server;
-    } else if (data.server && typeof data.server === 'object') {
-      ifUrl = data.server.url;
-      if (Array.isArray(data.server.headers)) {
-        for (const [k, v] of data.server.headers) {
-          extraHeaders[String(k)] = String(v);
-        }
-      }
-    }
-    if (!epUrl || !svUrl || !ifUrl) {
-      throw new Error(`Invalid Kyoto routes for post ${postId}`);
-    }
-    return { episodes: epUrl, servers: svUrl, iframe: ifUrl, extraHeaders };
-  }
 
   function formatAnimeItem(p) {
     return {
